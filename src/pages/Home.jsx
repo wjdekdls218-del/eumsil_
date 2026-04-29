@@ -4,16 +4,6 @@ import { Bell } from 'lucide-react'
 import { C, FONT } from '../theme'
 import { usePosts } from '../context/PostsContext'
 
-// ─── 더미 데이터 ──────────────────────────────────────────────
-const SHARE_ITEMS = [
-  { id: 1, title: '메리노울 실 100g 핑크',  region: '마포구',   image: 'https://picsum.photos/seed/knit11/300/300' },
-  { id: 2, title: '코바늘 세트 5종',        region: '서초구',   image: 'https://picsum.photos/seed/knit22/300/300' },
-  { id: 3, title: '아이보리 면사 200g',     region: '강남구',   image: 'https://picsum.photos/seed/knit33/300/300' },
-  { id: 4, title: '뜨개 도안 모음집',       region: '종로구',   image: 'https://picsum.photos/seed/knit44/300/300' },
-  { id: 5, title: '모헤어 혼방 흰색 실',    region: '용산구',   image: 'https://picsum.photos/seed/knit55/300/300' },
-]
-
-
 const FAQ_ITEMS = [
   { id: 1, title: '울 실과 아크릴 실 차이가 뭔가요?',         answerCount: 12 },
   { id: 2, title: '코바늘 입문자에게 추천하는 실 굵기는요?',  answerCount: 8  },
@@ -120,7 +110,7 @@ function ShareCard({ item }) {
       onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
     >
       <div style={{ position: 'relative' }}>
-        <img src={item.image} alt={item.title}
+        <img src={item.imageUrl || item.image} alt={item.title}
           style={{ width: '100%', height: 136, objectFit: 'cover', display: 'block' }} />
         <span style={{
           position: 'absolute', top: 8, left: 8,
@@ -204,7 +194,7 @@ function LatestCard({ item }) {
       onTouchStart={e => e.currentTarget.style.transform = 'scale(0.98)'}
       onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <img src={item.image} alt={item.title}
+      <img src={item.imageUrl || item.image} alt={item.title}
         style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
@@ -307,8 +297,9 @@ export default function Home() {
     return true
   })
 
-  const showShare = filter !== 'sell'
-  const showFAQ   = filter === 'all'
+  const shareItems = posts.filter(p => p.type === 'share').slice(0, 5)
+  const showShare  = filter !== 'sell' && shareItems.length > 0
+  const showFAQ    = filter === 'all'
 
   return (
     <div style={{
@@ -335,7 +326,7 @@ export default function Home() {
 
       {/* 콘텐츠 */}
       <main style={{ display: 'flex', flexDirection: 'column', gap: 28, paddingTop: 8, paddingBottom: 110 }}>
-        {showShare && <ShareSection items={SHARE_ITEMS} />}
+        {showShare && <ShareSection items={shareItems} />}
         <LatestSection items={filteredLatest} />
         {showFAQ && <FAQSection items={FAQ_ITEMS} />}
       </main>

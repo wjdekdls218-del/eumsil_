@@ -8,6 +8,7 @@ import ChatList from './pages/ChatList'
 import ChatRoom from './pages/ChatRoom'
 import Community from './pages/Community'
 import CommunityPost from './pages/CommunityPost'
+import CommunityWrite from './pages/CommunityWrite'
 import UserProfile from './pages/UserProfile'
 import MyPage from './pages/MyPage'
 import Settings from './pages/Settings'
@@ -29,6 +30,7 @@ export default function App() {
         {/* 자체 하단 바 / BottomNav 없는 단독 페이지 */}
         <Route path="/product/:id"    element={<ProductDetail />} />
         <Route path="/chat/:id"       element={<ChatRoom />} />
+        <Route path="/community/write" element={<CommunityWrite />} />
         <Route path="/community/:id"  element={<CommunityPost />} />
         <Route path="/user/:id"       element={<UserProfile />} />
         <Route path="/settings"       element={<Settings />} />

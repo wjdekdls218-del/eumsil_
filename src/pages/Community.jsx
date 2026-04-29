@@ -1,18 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart } from 'lucide-react'
+import { Heart, PenLine } from 'lucide-react'
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { C, FONT } from '../theme'
-import { QUESTIONS, BADGE_COLORS } from '../data/communityData'
+import { BADGE_COLORS } from '../data/communityData'
+import { db } from '../firebase'
 
 const TABS = ['전체', '실', '도구', '도안', '자유게시판']
 
+const formatTime = (ts) => {
+  if (!ts?.toDate) return ''
+  const diff = Date.now() - ts.toDate().getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
 export default function Community() {
   const [activeTab, setActiveTab] = useState('전체')
+  const [questions, setQuestions] = useState([])
   const navigate = useNavigate()
 
+  useEffect(() => {
+    const q = query(collection(db, 'community'), orderBy('createdAt', 'desc'))
+    return onSnapshot(q, (snap) => {
+      setQuestions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    })
+  }, [])
+
   const filtered = activeTab === '전체'
-    ? QUESTIONS
-    : QUESTIONS.filter(q => q.category === activeTab)
+    ? questions
+    : questions.filter(q => q.category === activeTab)
 
   return (
     <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
@@ -53,9 +74,13 @@ export default function Community() {
       </div>
 
       {/* Question cards */}
-      <div style={{ padding: '0 16px 100px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filtered.map(q => {
-          const badge = BADGE_COLORS[q.category]
+      <div style={{ padding: '0 16px 120px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: C.gray, fontSize: 14 }}>
+            아직 질문이 없어요.<br />첫 번째로 질문해보세요!
+          </div>
+        ) : filtered.map(q => {
+          const badge = BADGE_COLORS[q.category] ?? { bg: C.grayLight, text: C.gray }
           return (
             <div
               key={q.id}
@@ -63,10 +88,8 @@ export default function Community() {
               style={{
                 background: C.white, borderRadius: 16,
                 padding: '16px', cursor: 'pointer',
-                transition: 'opacity 0.1s',
               }}
             >
-              {/* Category badge */}
               <span style={{
                 display: 'inline-block', padding: '3px 10px', borderRadius: 999,
                 fontSize: 11, fontWeight: 600,
@@ -75,7 +98,6 @@ export default function Community() {
                 {q.category}
               </span>
 
-              {/* Title */}
               <p style={{
                 margin: '0 0 6px', fontSize: 15, fontWeight: 700,
                 color: C.text, letterSpacing: '-0.02em', lineHeight: 1.4,
@@ -83,7 +105,6 @@ export default function Community() {
                 {q.title}
               </p>
 
-              {/* Body preview */}
               <p style={{
                 margin: '0 0 12px', fontSize: 12, color: C.gray, lineHeight: 1.5,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -91,21 +112,48 @@ export default function Community() {
                 {q.body}
               </p>
 
-              {/* Footer */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.gray }}>
-                <span style={{ fontWeight: 600, color: C.text }}>{q.author.name}</span>
+                <span style={{ fontWeight: 600, color: C.text }}>{q.author?.name ?? '익명'}</span>
                 <span style={{ color: C.border }}>·</span>
-                <span>답변 {q.answers.length}</span>
+                <span>답변 {q.answers?.length ?? 0}</span>
                 <span style={{ color: C.border }}>·</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Heart size={11} color={C.point} fill={C.point} />
-                  {q.likes}
+                  {q.likes ?? 0}
                 </span>
-                <span style={{ marginLeft: 'auto' }}>{q.createdAt}</span>
+                <span style={{ marginLeft: 'auto' }}>{formatTime(q.createdAt)}</span>
               </div>
             </div>
           )
         })}
+      </div>
+
+      {/* FAB */}
+      <div style={{
+        position: 'fixed', bottom: 0,
+        left: '50%', transform: 'translateX(-50%)',
+        width: '100%', maxWidth: 390,
+        height: 0, pointerEvents: 'none', zIndex: 99,
+      }}>
+        <button
+          onClick={() => navigate('/community/write')}
+          style={{
+            position: 'absolute',
+            bottom: 'calc(68px + 16px)',
+            right: 16,
+            pointerEvents: 'auto',
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: C.point, color: C.white,
+            border: 'none', borderRadius: 999,
+            padding: '12px 20px',
+            fontSize: 14, fontWeight: 700,
+            fontFamily: 'inherit', cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(61,189,184,0.45)',
+          }}
+        >
+          <PenLine size={16} color="white" strokeWidth={2} />
+          질문하기
+        </button>
       </div>
     </div>
   )

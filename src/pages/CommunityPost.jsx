@@ -1,21 +1,78 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Send, Heart } from 'lucide-react'
+import { doc, getDoc } from 'firebase/firestore'
 import { C, FONT } from '../theme'
-import { QUESTIONS, BADGE_COLORS } from '../data/communityData'
+import { BADGE_COLORS } from '../data/communityData'
+import { db } from '../firebase'
+
+const formatTime = (ts) => {
+  if (!ts?.toDate) return typeof ts === 'string' ? ts : ''
+  const diff = Date.now() - ts.toDate().getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
 
 export default function CommunityPost() {
   const { id } = useParams()
   const navigate = useNavigate()
-
-  const question = QUESTIONS.find(q => q.id === id)
-
-  const [localAnswers, setLocalAnswers] = useState(() =>
-    question?.answers ? [...question.answers] : []
-  )
+  const [question, setQuestion] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [localAnswers, setLocalAnswers] = useState([])
   const [input, setInput] = useState('')
   const [liked, setLiked] = useState(new Set())
   const [sortBy, setSortBy] = useState('latest')
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'community', id))
+        if (snap.exists()) {
+          const data = { id: snap.id, ...snap.data() }
+          setQuestion(data)
+          setLocalAnswers(data.answers ?? [])
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetch()
+  }, [id])
+
+  const sortedAnswers = [...localAnswers].sort((a, b) =>
+    sortBy === 'likes' ? (b.likes ?? 0) - (a.likes ?? 0) : (b.ts ?? 0) - (a.ts ?? 0)
+  )
+
+  const handleSend = () => {
+    if (!input.trim()) return
+    setLocalAnswers(prev => [...prev, {
+      id: `a-new-${Date.now()}`,
+      author: { id: 'me', name: '나', avatar: '😊' },
+      body: input.trim(),
+      likes: 0, createdAt: '방금 전', ts: Date.now(),
+    }])
+    setInput('')
+  }
+
+  const toggleLike = (answerId) => {
+    setLiked(prev => {
+      const next = new Set(prev)
+      next.has(answerId) ? next.delete(answerId) : next.add(answerId)
+      return next
+    })
+  }
+
+  if (loading) {
+    return (
+      <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: C.gray, fontSize: 14 }}>불러오는 중...</p>
+      </div>
+    )
+  }
 
   if (!question) {
     return (
@@ -33,30 +90,7 @@ export default function CommunityPost() {
     )
   }
 
-  const badge = BADGE_COLORS[question.category]
-
-  const sortedAnswers = [...localAnswers].sort((a, b) =>
-    sortBy === 'likes' ? b.likes - a.likes : b.ts - a.ts
-  )
-
-  const handleSend = () => {
-    if (!input.trim()) return
-    setLocalAnswers(prev => [...prev, {
-      id: `a-new-${Date.now()}`,
-      author: { id: 'me', name: '나', avatar: '😊' },
-      body: input.trim(),
-      likes: 0, isBest: false, createdAt: '방금 전', ts: Date.now(),
-    }])
-    setInput('')
-  }
-
-  const toggleLike = (answerId) => {
-    setLiked(prev => {
-      const next = new Set(prev)
-      next.has(answerId) ? next.delete(answerId) : next.add(answerId)
-      return next
-    })
-  }
+  const badge = BADGE_COLORS[question.category] ?? { bg: C.grayLight, text: C.gray }
 
   return (
     <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
@@ -74,7 +108,6 @@ export default function CommunityPost() {
 
       {/* Content */}
       <div style={{ padding: '20px 16px 130px' }}>
-        {/* Badge */}
         <span style={{
           display: 'inline-block', padding: '4px 12px', borderRadius: 999,
           fontSize: 11, fontWeight: 600,
@@ -83,31 +116,27 @@ export default function CommunityPost() {
           {question.category}
         </span>
 
-        {/* Title */}
         <h2 style={{ margin: '0 0 12px', fontSize: 19, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1.4 }}>
           {question.title}
         </h2>
 
-        {/* Author + time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <button
-            onClick={() => navigate(`/user/${question.author.id}`)}
+            onClick={() => navigate(`/user/${question.author?.id ?? 'me'}`)}
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: C.point }}
           >
-            {question.author.name}
+            {question.author?.name ?? '익명'}
           </button>
-          <span style={{ fontSize: 12, color: C.gray }}>{question.createdAt}</span>
+          <span style={{ fontSize: 12, color: C.gray }}>{formatTime(question.createdAt)}</span>
         </div>
 
-        {/* Body */}
         <p style={{ margin: '0 0 24px', fontSize: 14, color: C.text, lineHeight: 1.75, letterSpacing: '-0.01em' }}>
           {question.body}
         </p>
 
-        {/* Divider */}
         <div style={{ height: 1, background: C.border, marginBottom: 20 }} />
 
-        {/* Answer count + sort toggle */}
+        {/* Answer count + sort */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.gray }}>
             답변 {localAnswers.length}개
@@ -139,7 +168,7 @@ export default function CommunityPost() {
               answer={answer}
               liked={liked.has(answer.id)}
               onLike={() => toggleLike(answer.id)}
-              onUserClick={() => navigate(`/user/${answer.author.id}`)}
+              onUserClick={() => navigate(`/user/${answer.author?.id}`)}
             />
           ))}
         </div>
@@ -185,10 +214,7 @@ export default function CommunityPost() {
 
 function AnswerCard({ answer, liked, onLike, onUserClick }) {
   return (
-    <div style={{
-      background: C.white, borderRadius: 16, padding: '16px',
-    }}>
-      {/* Profile row */}
+    <div style={{ background: C.white, borderRadius: 16, padding: '16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <div style={{
           width: 34, height: 34, borderRadius: '50%',
@@ -196,23 +222,21 @@ function AnswerCard({ answer, liked, onLike, onUserClick }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 18, flexShrink: 0,
         }}>
-          {answer.author.avatar || '👤'}
+          {answer.author?.avatar || '👤'}
         </div>
         <button
           onClick={onUserClick}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: C.text }}
         >
-          {answer.author.name}
+          {answer.author?.name}
         </button>
         <span style={{ fontSize: 11, color: C.gray }}>{answer.createdAt}</span>
       </div>
 
-      {/* Body */}
       <p style={{ margin: '0 0 12px', fontSize: 13, color: C.text, lineHeight: 1.7, letterSpacing: '-0.01em' }}>
         {answer.body}
       </p>
 
-      {/* Like button */}
       <button
         onClick={onLike}
         style={{
@@ -225,7 +249,7 @@ function AnswerCard({ answer, liked, onLike, onUserClick }) {
       >
         <Heart size={12} fill={liked ? C.point : 'none'} color={liked ? C.point : C.gray} />
         <span style={{ fontSize: 12, color: liked ? C.point : C.gray, fontWeight: liked ? 600 : 400 }}>
-          {answer.likes + (liked ? 1 : 0)}
+          {(answer.likes ?? 0) + (liked ? 1 : 0)}
         </span>
       </button>
     </div>

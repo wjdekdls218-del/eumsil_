@@ -151,18 +151,39 @@ export default function Write() {
     description.trim() !== '' &&
     !isSellLowWeight
 
-  const handleSubmit = () => {
-    if (!isValid) return
-    addPost({
-      id:     Date.now(),
-      title,
-      type:   postType,
-      price:  postType === 'sell' ? parseInt(price, 10) : 0,
-      region,
-      status: postType === 'share' ? '나눔' : '판매중',
-      image:  photos[0],
-    })
-    navigate('/')
+  const [uploading, setUploading] = useState(false)
+
+  const uploadToCloudinary = async (base64Image) => {
+    const formData = new FormData()
+    formData.append('file', base64Image)
+    formData.append('upload_preset', 'ai5j2gjk')
+    const res = await fetch(
+      'https://api.cloudinary.com/v1_1/dw4hwiskc/image/upload',
+      { method: 'POST', body: formData }
+    )
+    if (!res.ok) throw new Error('Cloudinary 업로드 실패')
+    const data = await res.json()
+    return data.secure_url
+  }
+
+  const handleSubmit = async () => {
+    if (!isValid || uploading) return
+    setUploading(true)
+    try {
+      const imageUrl = await uploadToCloudinary(photos[0])
+      await addPost({
+        title,
+        type:     postType,
+        price:    postType === 'sell' ? parseInt(price, 10) : 0,
+        region,
+        status:   postType === 'share' ? '나눔' : '판매중',
+        imageUrl,
+      })
+      navigate('/')
+    } catch (e) {
+      console.error('업로드 실패:', e)
+      setUploading(false)
+    }
   }
 
   // ─── 공통 스타일
@@ -193,17 +214,17 @@ export default function Write() {
         <span style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
           글 올리기
         </span>
-        <button onClick={handleSubmit} disabled={!isValid} style={{
-          background: isValid ? C.point : C.border,
-          color: isValid ? C.white : C.gray,
+        <button onClick={handleSubmit} disabled={!isValid || uploading} style={{
+          background: isValid && !uploading ? C.point : C.border,
+          color: isValid && !uploading ? C.white : C.gray,
           border: 'none', borderRadius: 999,
           padding: '7px 20px',
           fontSize: 14, fontWeight: 700,
-          cursor: isValid ? 'pointer' : 'default',
+          cursor: isValid && !uploading ? 'pointer' : 'default',
           fontFamily: 'inherit', letterSpacing: '-0.01em',
           transition: 'background 0.15s ease',
         }}>
-          올리기
+          {uploading ? '올리는 중...' : '올리기'}
         </button>
       </header>
 
