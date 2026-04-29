@@ -58,7 +58,7 @@ export default function BottomNav() {
     { path: '/',          label: '홈',         icon: (a) => <HomeIcon active={a} /> },
     { path: '/chat',      label: '채팅',        icon: (a) => <ChatIcon active={a} /> },
     { path: '/write',     label: null,          icon: null, isWrite: true },
-    { path: '/community', label: '커뮤니티',    icon: (a) => <GridIcon active={a} /> },
+    { path: '/community', label: '질문방',      icon: (a) => <GridIcon active={a} /> },
     { path: '/mypage',    label: '마이페이지',  icon: (a) => <UserIcon active={a} /> },
   ]
 

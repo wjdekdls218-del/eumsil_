@@ -8,7 +8,10 @@ import ChatList from './pages/ChatList'
 import ChatRoom from './pages/ChatRoom'
 import Community from './pages/Community'
 import CommunityPost from './pages/CommunityPost'
+import UserProfile from './pages/UserProfile'
 import MyPage from './pages/MyPage'
+import Settings from './pages/Settings'
+import MyReviews from './pages/MyReviews'
 
 export default function App() {
   return (
@@ -27,6 +30,9 @@ export default function App() {
         <Route path="/product/:id"    element={<ProductDetail />} />
         <Route path="/chat/:id"       element={<ChatRoom />} />
         <Route path="/community/:id"  element={<CommunityPost />} />
+        <Route path="/user/:id"       element={<UserProfile />} />
+        <Route path="/settings"       element={<Settings />} />
+        <Route path="/mypage/reviews" element={<MyReviews />} />
         <Route path="/write"          element={<Write />} />
       </Routes>
     </BrowserRouter>
