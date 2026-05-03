@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { C } from '../theme'
+import { useNotifications } from '../context/NotificationsContext'
 
 const HomeIcon = ({ active }) => (
   <svg width="24" height="24" viewBox="0 0 24 24"
@@ -50,16 +51,17 @@ const UserIcon = ({ active }) => (
 export default function BottomNav() {
   const navigate  = useNavigate()
   const { pathname } = useLocation()
+  const { chatCount, answerCount } = useNotifications()
 
   const isActive = (path) =>
     path === '/' ? pathname === '/' : pathname.startsWith(path)
 
   const tabs = [
-    { path: '/',          label: '홈',         icon: (a) => <HomeIcon active={a} /> },
-    { path: '/chat',      label: '채팅',        icon: (a) => <ChatIcon active={a} /> },
-    { path: '/write',     label: null,          icon: null, isWrite: true },
-    { path: '/community', label: '질문방',      icon: (a) => <GridIcon active={a} /> },
-    { path: '/mypage',    label: '마이페이지',  icon: (a) => <UserIcon active={a} /> },
+    { path: '/',          label: '홈',        icon: (a) => <HomeIcon active={a} /> },
+    { path: '/chat',      label: '채팅',       icon: (a) => <ChatIcon active={a} />, badge: chatCount },
+    { path: '/write',     label: null,         icon: null, isWrite: true },
+    { path: '/community', label: '질문방',     icon: (a) => <GridIcon active={a} />, badge: answerCount },
+    { path: '/mypage',    label: '마이페이지', icon: (a) => <UserIcon active={a} /> },
   ]
 
   return (
@@ -76,6 +78,7 @@ export default function BottomNav() {
     }}>
       {tabs.map((tab) => {
         const active = isActive(tab.path)
+        const badge  = tab.badge ?? 0
         return (
           <button
             key={tab.path}
@@ -99,7 +102,22 @@ export default function BottomNav() {
               </div>
             ) : (
               <>
-                {tab.icon(active)}
+                <div style={{ position: 'relative' }}>
+                  {tab.icon(active)}
+                  {badge > 0 && (
+                    <span style={{
+                      position: 'absolute', top: -3, right: -5,
+                      minWidth: 16, height: 16, borderRadius: 999,
+                      background: C.point, color: C.white,
+                      fontSize: 9, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '0 4px',
+                      border: `1.5px solid ${C.white}`,
+                    }}>
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </div>
                 <span style={{
                   fontSize: 10, letterSpacing: '-0.01em',
                   color: active ? C.point : C.gray,

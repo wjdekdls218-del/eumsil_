@@ -1,9 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { doc, getDoc } from 'firebase/firestore'
+import { ArrowLeft, MoreVertical } from 'lucide-react'
+import { doc, getDoc, deleteDoc } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
+import { useAuth } from '../context/AuthContext'
+
+function DeleteModal({ onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.45)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div style={{ width: '100%', maxWidth: 390, background: C.white, borderRadius: '20px 20px 0 0', padding: '28px 24px 36px' }}>
+        <p style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>정말 삭제할까요?</p>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: C.gray }}>삭제된 글은 복구할 수 없어요.</p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '13px', borderRadius: 999, border: `1.5px solid ${C.border}`, background: C.white, fontSize: 15, fontWeight: 600, color: C.text, cursor: 'pointer', fontFamily: 'inherit' }}>취소</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '13px', borderRadius: 999, border: 'none', background: '#E53E3E', fontSize: 15, fontWeight: 700, color: C.white, cursor: 'pointer', fontFamily: 'inherit' }}>삭제하기</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function StatusBadge({ status }) {
   const map = {
@@ -27,8 +47,11 @@ function StatusBadge({ status }) {
 export default function ProductDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   useEffect(() => {
     const fetch = async () => {
@@ -63,6 +86,12 @@ export default function ProductDetail() {
 
   const imageUrl = product.imageUrl || product.image
   const date = product.createdAt?.toDate().toLocaleDateString('ko-KR') ?? ''
+  const isOwner = user?.uid && product.uid === user.uid
+
+  const handleDelete = async () => {
+    await deleteDoc(doc(db, 'posts', id))
+    navigate('/', { replace: true })
+  }
 
   return (
     <div style={{
@@ -104,20 +133,77 @@ export default function ProductDetail() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
           <div style={{
             width: 44, height: 44, borderRadius: 999, flexShrink: 0,
-            background: C.grayLight,
+            background: C.grayLight, overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22,
           }}>
-            🧶
+            {product.profileImage ? (
+              <img
+                src={product.profileImage}
+                alt={product.nickname ?? ''}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gray} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            )}
           </div>
           <div>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>
-              {product.seller?.name ?? '실뭉치'}
+              {product.nickname ?? product.seller?.name ?? '판매자'}
             </p>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: C.gray }}>
               {product.region}
             </p>
           </div>
+
+          {isOwner && (
+            <div style={{ marginLeft: 'auto', position: 'relative' }}>
+              <button
+                onClick={() => setShowMenu(v => !v)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+              >
+                <MoreVertical size={20} color={C.gray} strokeWidth={1.8} />
+              </button>
+              {showMenu && (
+                <>
+                  <div onClick={() => setShowMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                    background: C.white, borderRadius: 12,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    overflow: 'hidden', minWidth: 120,
+                  }}>
+                    <button
+                      onClick={() => { navigate(`/write?edit=${id}`); setShowMenu(false) }}
+                      style={{
+                        display: 'block', width: '100%', padding: '12px 16px',
+                        textAlign: 'left', border: 'none',
+                        borderBottom: `1px solid ${C.border}`,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 14, color: C.text, background: C.white,
+                      }}
+                    >
+                      수정하기
+                    </button>
+                    <button
+                      onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
+                      style={{
+                        display: 'block', width: '100%', padding: '12px 16px',
+                        textAlign: 'left', border: 'none',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 14, color: '#E53E3E', background: C.white,
+                      }}
+                    >
+                      삭제하기
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ height: 1, background: C.border, margin: '0 20px' }} />
@@ -154,8 +240,9 @@ export default function ProductDetail() {
           ) : null}
 
           {date ? (
-            <p style={{ margin: 0, fontSize: 12, color: C.gray }}>등록일 {date}</p>
+            <p style={{ margin: '0 0 16px', fontSize: 12, color: C.gray }}>등록일 {date}</p>
           ) : null}
+
         </div>
       </div>
 
@@ -196,6 +283,13 @@ export default function ProductDetail() {
           {product.status === '완료' ? '거래 완료' : '채팅하기'}
         </button>
       </div>
+
+      {showDeleteConfirm && (
+        <DeleteModal
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   )
 }

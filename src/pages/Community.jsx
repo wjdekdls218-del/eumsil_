@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Heart, PenLine } from 'lucide-react'
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, query, orderBy, getDocs } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { BADGE_COLORS } from '../data/communityData'
 import { db } from '../firebase'
@@ -22,6 +22,7 @@ const formatTime = (ts) => {
 export default function Community() {
   const [activeTab, setActiveTab] = useState('전체')
   const [questions, setQuestions] = useState([])
+  const [answerLikes, setAnswerLikes] = useState({})
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -30,6 +31,26 @@ export default function Community() {
       setQuestions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     })
   }, [])
+
+  // 질문 목록이 바뀔 때 각 질문의 answers 좋아요 합산
+  const questionIds = questions.map(q => q.id).join(',')
+  useEffect(() => {
+    if (!questionIds) return
+    const ids = questionIds.split(',')
+    Promise.all(
+      ids.map(qid =>
+        getDocs(collection(db, 'community', qid, 'answers'))
+          .then(snap => {
+            const total = snap.docs.reduce((sum, d) => sum + (d.data().likes ?? 0), 0)
+            return [qid, total]
+          })
+      )
+    ).then(entries => {
+      const result = Object.fromEntries(entries)
+      console.log('[Community] 답변 좋아요 합산:', result)
+      setAnswerLikes(result)
+    }).catch(err => console.error('[Community] 답변 좋아요 로드 실패:', err))
+  }, [questionIds])
 
   const filtered = activeTab === '전체'
     ? questions
@@ -115,11 +136,11 @@ export default function Community() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.gray }}>
                 <span style={{ fontWeight: 600, color: C.text }}>{q.author?.name ?? '익명'}</span>
                 <span style={{ color: C.border }}>·</span>
-                <span>답변 {q.answers?.length ?? 0}</span>
+                <span>답변 {q.answerCount ?? q.answers?.length ?? 0}</span>
                 <span style={{ color: C.border }}>·</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Heart size={11} color={C.point} fill={C.point} />
-                  {q.likes ?? 0}
+                  {answerLikes[q.id] ?? 0}
                 </span>
                 <span style={{ marginLeft: 'auto' }}>{formatTime(q.createdAt)}</span>
               </div>

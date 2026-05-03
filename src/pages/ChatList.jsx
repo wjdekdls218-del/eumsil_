@@ -1,117 +1,102 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { C, FONT } from '../theme'
+import { db } from '../firebase'
+import { useAuth } from '../context/AuthContext'
 
-// ─── 더미 데이터
-const CHAT_ROOMS = [
-  {
-    id: 1,
-    user: { name: '알파카팜', avatar: 'https://picsum.photos/seed/user10/100/100' },
-    lastMessage: '혹시 직거래 가능하신가요?',
-    time: '오후 2:34',
-    unread: 2,
-    productId: 10,
-  },
-  {
-    id: 2,
-    user: { name: '실뭉치언니', avatar: 'https://picsum.photos/seed/user1/100/100' },
-    lastMessage: '나눔 감사합니다 🧶',
-    time: '오전 11:05',
-    unread: 0,
-    productId: 1,
-  },
-  {
-    id: 3,
-    user: { name: '코바늘요정', avatar: 'https://picsum.photos/seed/user12/100/100' },
-    lastMessage: '네 택배로 보내드릴게요!',
-    time: '어제',
-    unread: 0,
-    productId: 12,
-  },
-  {
-    id: 4,
-    user: { name: '니팅데이즈', avatar: 'https://picsum.photos/seed/user11/100/100' },
-    lastMessage: '감사합니다. 잘 쓸게요!',
-    time: '3일 전',
-    unread: 0,
-    productId: 11,
-  },
-]
+const formatTime = (ts) => {
+  if (!ts?.toDate) return ''
+  const d = ts.toDate()
+  const now = new Date()
+  const diffMs = now - d
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true })
+  if (diffDays === 1) return '어제'
+  if (diffDays < 7) return `${diffDays}일 전`
+  return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })
+}
 
 export default function ChatList() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [chats, setChats] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    const q = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', user.uid)
+    )
+    return onSnapshot(q, (snap) => {
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const tA = a.lastMessageTime?.toDate?.()?.getTime() ?? 0
+          const tB = b.lastMessageTime?.toDate?.()?.getTime() ?? 0
+          return tB - tA
+        })
+      setChats(list)
+      setLoading(false)
+    }, () => setLoading(false))
+  }, [])
 
   return (
-    <div style={{
-      maxWidth: 390, margin: '0 auto', minHeight: '100dvh',
-      background: C.bg, fontFamily: FONT,
-    }}>
-      {/* 헤더 */}
-      <header style={{
-        padding: '20px 20px 12px',
-        position: 'sticky', top: 0, background: C.bg, zIndex: 50,
-      }}>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
-          채팅
-        </h1>
+    <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
+      <header style={{ padding: '20px 20px 12px', position: 'sticky', top: 0, background: C.bg, zIndex: 50 }}>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>채팅</h1>
       </header>
 
-      {/* 채팅방 리스트 */}
       <div style={{ paddingBottom: 90 }}>
-        {CHAT_ROOMS.map((room, i) => (
-          <div key={room.id}>
-            <div
-              onClick={() => navigate(`/chat/${room.id}`)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '14px 20px',
-                cursor: 'pointer',
-                background: C.white,
-              }}
-            >
-              {/* 프로필 이미지 */}
-              <img
-                src={room.user.avatar}
-                alt={room.user.name}
-                style={{ width: 52, height: 52, borderRadius: 999, objectFit: 'cover', flexShrink: 0 }}
-              />
-
-              {/* 내용 */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>
-                    {room.user.name}
-                  </span>
-                  <span style={{ fontSize: 11, color: C.gray, flexShrink: 0 }}>{room.time}</span>
+        {loading ? (
+          <div style={{ padding: '60px 0', textAlign: 'center', color: C.gray, fontSize: 14 }}>
+            불러오는 중...
+          </div>
+        ) : chats.length === 0 ? (
+          <div style={{ padding: '60px 0', textAlign: 'center', color: C.gray, fontSize: 14 }}>
+            아직 채팅이 없어요.
+          </div>
+        ) : chats.map((room, i) => {
+          const otherName = room.otherName ?? (room.participants?.find(p => p !== 'me') ?? '상대방')
+          return (
+            <div key={room.id}>
+              <div
+                onClick={() => navigate(`/chat/${room.id}`)}
+                style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: C.white }}
+              >
+                <div style={{
+                  width: 52, height: 52, borderRadius: 999,
+                  background: C.grayLight, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 26,
+                }}>
+                  🧶
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>
+                      {otherName}
+                    </span>
+                    <span style={{ fontSize: 11, color: C.gray, flexShrink: 0 }}>
+                      {formatTime(room.lastMessageTime)}
+                    </span>
+                  </div>
                   <p style={{
                     margin: 0, fontSize: 13, color: C.gray,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     letterSpacing: '-0.01em',
                   }}>
-                    {room.lastMessage}
+                    {room.lastMessage ?? ''}
                   </p>
-                  {room.unread > 0 && (
-                    <span style={{
-                      flexShrink: 0,
-                      minWidth: 20, height: 20,
-                      borderRadius: 999, padding: '0 6px',
-                      background: C.point, color: C.white,
-                      fontSize: 11, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {room.unread}
-                    </span>
-                  )}
                 </div>
               </div>
+              {i < chats.length - 1 && (
+                <div style={{ height: 1, background: C.border, margin: '0 20px' }} />
+              )}
             </div>
-            {/* 구분선 (마지막 제외) */}
-            {i < CHAT_ROOMS.length - 1 && (
-              <div style={{ height: 1, background: C.border, margin: '0 20px' }} />
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

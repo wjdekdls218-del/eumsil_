@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { C, FONT } from '../theme'
 import { usePosts } from '../context/PostsContext'
+import { useNotifications } from '../context/NotificationsContext'
 
 const FAQ_ITEMS = [
   { id: 1, title: '울 실과 아크릴 실 차이가 뭔가요?',         answerCount: 12 },
@@ -130,7 +131,9 @@ function ShareCard({ item }) {
         }}>
           {item.title}
         </p>
-        <p style={{ margin: '5px 0 0', fontSize: 11, color: C.gray, display: 'flex', alignItems: 'center', gap: 3 }}>
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: C.gray, display: 'flex', alignItems: 'center', gap: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontWeight: 600, color: C.text, flexShrink: 0 }}>{item.nickname ?? item.seller?.name ?? '익명'}</span>
+          <span style={{ color: C.border, flexShrink: 0 }}>·</span>
           <LocationIcon />{item.region}
         </p>
       </div>
@@ -212,6 +215,16 @@ function LatestCard({ item }) {
           {item.type === 'share' ? '나눔' : `${item.price.toLocaleString()}원`}
         </p>
         <p style={{ margin: 0, fontSize: 12, color: C.gray, display: 'flex', alignItems: 'center', gap: 3 }}>
+          {item.profileImage && (
+            <img
+              src={item.profileImage}
+              alt=""
+              style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+              referrerPolicy="no-referrer"
+            />
+          )}
+          <span style={{ fontWeight: 600, color: C.text }}>{item.nickname ?? item.seller?.name ?? '익명'}</span>
+          <span style={{ color: C.border }}>·</span>
           <LocationIcon />{item.region}
         </p>
       </div>
@@ -285,6 +298,8 @@ function FAQSection({ items }) {
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { posts } = usePosts()
+  const navigate = useNavigate()
+  const { unreadCount } = useNotifications()
   const filter = searchParams.get('filter') || 'all'
 
   const handleFilter = (next) => {
@@ -316,8 +331,19 @@ export default function Home() {
           <span style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
             이음실<span style={{ color: C.point }}>.</span>
           </span>
-          <button style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}>
+          <button
+            onClick={() => navigate('/notifications')}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', position: 'relative' }}
+          >
             <Bell size={22} color={C.text} strokeWidth={1.8} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: 2,
+                width: 8, height: 8, borderRadius: '50%',
+                background: '#E53E3E',
+                border: `1.5px solid ${C.bg}`,
+              }} />
+            )}
           </button>
         </div>
         <SearchBar />

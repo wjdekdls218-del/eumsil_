@@ -1,23 +1,47 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Camera, X, MapPin } from 'lucide-react'
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { usePosts } from '../context/PostsContext'
+import { useAuth } from '../context/AuthContext'
+import { db } from '../firebase'
 
 export default function Write() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
   const { addPost } = usePosts()
+  const { user } = useAuth()
   const fileInputRef = useRef(null)
 
   // ─── 폼 상태
-  const [photos,      setPhotos]      = useState([])
-  const [postType,    setPostType]    = useState('share')
-  const [title,       setTitle]       = useState('')
-  const [category,    setCategory]    = useState('')
+  const [photos,           setPhotos]           = useState([])
+  const [existingImageUrl, setExistingImageUrl] = useState('')
+  const [postType,         setPostType]         = useState('share')
+  const [title,            setTitle]            = useState('')
+  const [category,         setCategory]         = useState('')
   const [weight,      setWeight]      = useState('')
   const [price,       setPrice]       = useState('')
   const [region,      setRegion]      = useState('')
   const [description, setDescription] = useState('')
+
+  // ─── 수정 모드: 기존 데이터 불러오기
+  useEffect(() => {
+    if (!editId) return
+    getDoc(doc(db, 'posts', editId)).then(snap => {
+      if (!snap.exists()) return
+      const d = snap.data()
+      setPostType(d.type ?? 'share')
+      setTitle(d.title ?? '')
+      setCategory(d.category ?? '')
+      setWeight(d.weight ?? '')
+      setPrice(d.price ? String(d.price) : '')
+      setRegion(d.region ?? '')
+      setDescription(d.description ?? '')
+      setExistingImageUrl(d.imageUrl ?? '')
+    })
+  }, [editId])
 
   // ─── 지도 모달 상태
   const [showMap,     setShowMap]     = useState(false)
@@ -141,8 +165,10 @@ export default function Write() {
   const weightNum = parseFloat(weight) || 0
   const isSellLowWeight = postType === 'sell' && weight !== '' && weightNum < 50
 
+  const hasImage = photos.length > 0 || (!!editId && existingImageUrl !== '')
+
   const isValid =
-    photos.length > 0 &&
+    hasImage &&
     title.trim()       !== '' &&
     category           !== '' &&
     weight.trim()      !== '' &&
@@ -170,15 +196,39 @@ export default function Write() {
     if (!isValid || uploading) return
     setUploading(true)
     try {
-      const imageUrl = await uploadToCloudinary(photos[0])
-      await addPost({
-        title,
+      // Firestore users 컬렉션에서 최신 닉네임/프로필 이미지 가져오기
+      let nickname = user?.displayName ?? '실뭉치'
+      let profileImage = user?.photoURL ?? ''
+      if (user?.uid) {
+        const snap = await getDoc(doc(db, 'users', user.uid))
+        if (snap.exists()) {
+          nickname     = snap.data().displayName || nickname
+          profileImage = snap.data().photoURL    || profileImage
+        }
+      }
+
+      const imageUrl = photos.length > 0
+        ? await uploadToCloudinary(photos[0])
+        : existingImageUrl
+
+      const postData = {
+        title, category, weight, description,
         type:     postType,
         price:    postType === 'sell' ? parseInt(price, 10) : 0,
         region,
         status:   postType === 'share' ? '나눔' : '판매중',
         imageUrl,
-      })
+        uid:          user?.uid ?? '',
+        nickname,
+        profileImage,
+        seller: { id: user?.uid ?? '', name: nickname },
+      }
+
+      if (editId) {
+        await updateDoc(doc(db, 'posts', editId), { ...postData, updatedAt: serverTimestamp() })
+      } else {
+        await addPost(postData)
+      }
       navigate('/')
     } catch (e) {
       console.error('업로드 실패:', e)
@@ -212,7 +262,7 @@ export default function Write() {
           <ArrowLeft size={22} color={C.text} strokeWidth={1.8} />
         </button>
         <span style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
-          글 올리기
+          {editId ? '글 수정' : '글 올리기'}
         </span>
         <button onClick={handleSubmit} disabled={!isValid || uploading} style={{
           background: isValid && !uploading ? C.point : C.border,
@@ -234,6 +284,20 @@ export default function Write() {
         {/* 사진 업로드 */}
         <div style={{ background: C.white, borderRadius: 16, padding: 16 }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {/* 수정 모드: 기존 이미지 */}
+            {editId && existingImageUrl && photos.length === 0 && (
+              <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
+                <img src={existingImageUrl} alt="" style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', display: 'block' }} />
+                <button onClick={() => setExistingImageUrl('')} style={{
+                  position: 'absolute', top: -6, right: -6,
+                  width: 20, height: 20, borderRadius: 999,
+                  background: C.text, border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}>
+                  <X size={11} color={C.white} strokeWidth={2.5} />
+                </button>
+              </div>
+            )}
             {photos.map((photo, i) => (
               <div key={i} style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
                 <img src={photo} alt="" style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', display: 'block' }} />

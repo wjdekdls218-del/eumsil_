@@ -1,18 +1,34 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
+import { useAuth } from '../context/AuthContext'
 
 const CATEGORIES = ['실', '도구', '도안', '자유게시판']
 
 export default function CommunityWrite() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
+  const { user } = useAuth()
   const [category, setCategory] = useState('')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // 수정 모드: 기존 데이터 불러오기
+  useEffect(() => {
+    if (!editId) return
+    getDoc(doc(db, 'community', editId)).then(snap => {
+      if (!snap.exists()) return
+      const d = snap.data()
+      setCategory(d.category ?? '')
+      setTitle(d.title ?? '')
+      setBody(d.body ?? '')
+    })
+  }, [editId])
 
   const isValid = category !== '' && title.trim() !== '' && body.trim() !== ''
 
@@ -20,16 +36,26 @@ export default function CommunityWrite() {
     if (!isValid || saving) return
     setSaving(true)
     try {
-      await addDoc(collection(db, 'community'), {
-        category,
-        title: title.trim(),
-        body: body.trim(),
-        author: { id: 'me', name: '실뭉치' },
-        likes: 0,
-        answers: [],
-        createdAt: serverTimestamp(),
-      })
-      navigate('/community')
+      if (editId) {
+        await updateDoc(doc(db, 'community', editId), {
+          category,
+          title: title.trim(),
+          body: body.trim(),
+          updatedAt: serverTimestamp(),
+        })
+      } else {
+        await addDoc(collection(db, 'community'), {
+          category,
+          title: title.trim(),
+          body: body.trim(),
+          author: { id: user?.uid ?? 'me', name: user?.displayName ?? '실뭉치' },
+          uid: user?.uid ?? '',
+          likes: 0,
+          answerCount: 0,
+          createdAt: serverTimestamp(),
+        })
+      }
+      navigate(editId ? `/community/${editId}` : '/community')
     } catch (e) {
       console.error('저장 실패:', e)
       setSaving(false)
@@ -49,7 +75,7 @@ export default function CommunityWrite() {
           <ArrowLeft size={22} color={C.text} strokeWidth={1.8} />
         </button>
         <span style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
-          질문 올리기
+          {editId ? '질문 수정' : '질문 올리기'}
         </span>
         <button
           onClick={handleSubmit}
@@ -65,7 +91,7 @@ export default function CommunityWrite() {
             transition: 'background 0.15s',
           }}
         >
-          {saving ? '올리는 중...' : '올리기'}
+          {saving ? '저장 중...' : editId ? '저장' : '올리기'}
         </button>
       </header>
 
