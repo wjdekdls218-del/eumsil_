@@ -4,6 +4,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationsContext'
 
 const formatTime = (ts) => {
   if (!ts?.toDate) return ''
@@ -20,6 +21,7 @@ const formatTime = (ts) => {
 export default function ChatList() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { unreadChatIds } = useNotifications()
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -59,6 +61,7 @@ export default function ChatList() {
           </div>
         ) : chats.map((room, i) => {
           const otherName = room.otherName ?? (room.participants?.find(p => p !== 'me') ?? '상대방')
+          const hasUnread = unreadChatIds.has(room.id)
           return (
             <div key={room.id}>
               <div
@@ -78,12 +81,25 @@ export default function ChatList() {
                     <span style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>
                       {otherName}
                     </span>
-                    <span style={{ fontSize: 11, color: C.gray, flexShrink: 0 }}>
-                      {formatTime(room.lastMessageTime)}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      {hasUnread && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 999,
+                          background: C.point, color: C.white,
+                          fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
+                        }}>
+                          NEW
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: C.gray }}>
+                        {formatTime(room.lastMessageTime)}
+                      </span>
+                    </div>
                   </div>
                   <p style={{
-                    margin: 0, fontSize: 13, color: C.gray,
+                    margin: 0, fontSize: 13,
+                    color: hasUnread ? C.text : C.gray,
+                    fontWeight: hasUnread ? 600 : 400,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     letterSpacing: '-0.01em',
                   }}>

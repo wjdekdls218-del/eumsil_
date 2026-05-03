@@ -10,6 +10,7 @@ import { C, FONT } from '../theme'
 import { BADGE_COLORS } from '../data/communityData'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import ReportModal from '../components/ReportModal'
 
 const formatTime = (ts) => {
   if (!ts?.toDate) return typeof ts === 'string' ? ts : ''
@@ -76,7 +77,7 @@ function DeleteModal({ onConfirm, onCancel }) {
 export default function CommunityPost() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, banInfo } = useAuth()
   const inputRef = useRef(null)
   const scrollRef = useRef(null)
 
@@ -90,6 +91,7 @@ export default function CommunityPost() {
   const [showMenu, setShowMenu] = useState(false)
   const [sending, setSending] = useState(false)
   const [questionLiked, setQuestionLiked] = useState(false)
+  const [reportTarget, setReportTarget] = useState(null) // { targetType, targetId, reportedId }
 
   // 질문 로드
   useEffect(() => {
@@ -123,7 +125,7 @@ export default function CommunityPost() {
   })
 
   const handleSend = async () => {
-    if (!input.trim() || sending) return
+    if (!input.trim() || sending || banInfo?.isBanned) return
     setSending(true)
     const body = input.trim()
     setInput('')
@@ -274,7 +276,7 @@ export default function CommunityPost() {
           </button>
           <span style={{ fontSize: 12, color: C.gray }}>{formatTime(question.createdAt)}</span>
 
-          {isOwner && (
+          {(isOwner || (user && !isOwner)) && (
             <div style={{ marginLeft: 'auto', position: 'relative' }}>
               <button
                 onClick={() => setShowMenu(v => !v)}
@@ -291,29 +293,48 @@ export default function CommunityPost() {
                     boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                     overflow: 'hidden', minWidth: 120,
                   }}>
-                    <button
-                      onClick={() => { navigate(`/community/write?edit=${id}`); setShowMenu(false) }}
-                      style={{
-                        display: 'block', width: '100%', padding: '12px 16px',
-                        textAlign: 'left', border: 'none',
-                        borderBottom: `1px solid ${C.border}`,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        fontSize: 14, color: C.text, background: C.white,
-                      }}
-                    >
-                      수정하기
-                    </button>
-                    <button
-                      onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
-                      style={{
-                        display: 'block', width: '100%', padding: '12px 16px',
-                        textAlign: 'left', border: 'none',
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        fontSize: 14, color: '#E53E3E', background: C.white,
-                      }}
-                    >
-                      삭제하기
-                    </button>
+                    {isOwner ? (
+                      <>
+                        <button
+                          onClick={() => { navigate(`/community/write?edit=${id}`); setShowMenu(false) }}
+                          style={{
+                            display: 'block', width: '100%', padding: '12px 16px',
+                            textAlign: 'left', border: 'none',
+                            borderBottom: `1px solid ${C.border}`,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 14, color: C.text, background: C.white,
+                          }}
+                        >
+                          수정하기
+                        </button>
+                        <button
+                          onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
+                          style={{
+                            display: 'block', width: '100%', padding: '12px 16px',
+                            textAlign: 'left', border: 'none',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 14, color: '#E53E3E', background: C.white,
+                          }}
+                        >
+                          삭제하기
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setReportTarget({ targetType: 'community', targetId: id, reportedId: question?.uid ?? question?.author?.id ?? '' })
+                          setShowMenu(false)
+                        }}
+                        style={{
+                          display: 'block', width: '100%', padding: '12px 16px',
+                          textAlign: 'left', border: 'none',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          fontSize: 14, color: '#E53E3E', background: C.white,
+                        }}
+                      >
+                        신고하기
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -378,6 +399,8 @@ export default function CommunityPost() {
               liked={liked.has(answer.id)}
               onLike={() => toggleLike(answer.id)}
               onUserClick={() => navigate(`/user/${answer.uid ?? answer.author?.id}`)}
+              canReport={!!user && user.uid !== answer.uid}
+              onReport={() => setReportTarget({ targetType: 'community', targetId: answer.id, reportedId: answer.uid ?? '' })}
             />
           ))}
         </div>
@@ -426,15 +449,24 @@ export default function CommunityPost() {
           onCancel={() => setShowDeleteConfirm(false)}
         />
       )}
+      {reportTarget && (
+        <ReportModal
+          targetType={reportTarget.targetType}
+          targetId={reportTarget.targetId}
+          reportedId={reportTarget.reportedId}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   )
 }
 
-function AnswerCard({ answer, liked, onLike, onUserClick }) {
+function AnswerCard({ answer, liked, onLike, onUserClick, canReport, onReport }) {
+  const [showMenu, setShowMenu] = useState(false)
+
   return (
     <div style={{ background: C.white, borderRadius: 16, padding: '16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        {/* 프로필 이미지 */}
         <div style={{
           width: 34, height: 34, borderRadius: '50%',
           background: C.grayLight, overflow: 'hidden',
@@ -458,6 +490,40 @@ function AnswerCard({ answer, liked, onLike, onUserClick }) {
           {answer.nickname ?? answer.author?.name ?? '익명'}
         </button>
         <span style={{ fontSize: 11, color: C.gray }}>{formatTime(answer.createdAt)}</span>
+
+        {canReport && (
+          <div style={{ marginLeft: 'auto', position: 'relative' }}>
+            <button
+              onClick={() => setShowMenu(v => !v)}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+            >
+              <MoreVertical size={16} color={C.gray} strokeWidth={1.8} />
+            </button>
+            {showMenu && (
+              <>
+                <div onClick={() => setShowMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                  background: C.white, borderRadius: 12,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  overflow: 'hidden', minWidth: 110,
+                }}>
+                  <button
+                    onClick={() => { onReport(); setShowMenu(false) }}
+                    style={{
+                      display: 'block', width: '100%', padding: '12px 16px',
+                      textAlign: 'left', border: 'none',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: 14, color: '#E53E3E', background: C.white,
+                    }}
+                  >
+                    신고하기
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <p style={{ margin: '0 0 12px', fontSize: 13, color: C.text, lineHeight: 1.7, letterSpacing: '-0.01em' }}>

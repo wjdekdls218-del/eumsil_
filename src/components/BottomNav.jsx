@@ -106,16 +106,11 @@ export default function BottomNav() {
                   {tab.icon(active)}
                   {badge > 0 && (
                     <span style={{
-                      position: 'absolute', top: -3, right: -5,
-                      minWidth: 16, height: 16, borderRadius: 999,
-                      background: C.point, color: C.white,
-                      fontSize: 9, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '0 4px',
+                      position: 'absolute', top: 0, right: -1,
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: '#FF4444',
                       border: `1.5px solid ${C.white}`,
-                    }}>
-                      {badge > 99 ? '99+' : badge}
-                    </span>
+                    }} />
                   )}
                 </div>
                 <span style={{

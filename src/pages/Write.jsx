@@ -12,7 +12,7 @@ export default function Write() {
   const [searchParams] = useSearchParams()
   const editId = searchParams.get('edit')
   const { addPost } = usePosts()
-  const { user } = useAuth()
+  const { user, banInfo } = useAuth()
   const fileInputRef = useRef(null)
 
   // ─── 폼 상태
@@ -193,7 +193,7 @@ export default function Write() {
   }
 
   const handleSubmit = async () => {
-    if (!isValid || uploading) return
+    if (!isValid || uploading || banInfo?.isBanned) return
     setUploading(true)
     try {
       // Firestore users 컬렉션에서 최신 닉네임/프로필 이미지 가져오기

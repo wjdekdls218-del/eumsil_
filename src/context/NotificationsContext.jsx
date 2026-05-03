@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from './AuthContext'
 
-const NotificationsContext = createContext({ unreadCount: 0, chatCount: 0, answerCount: 0 })
+const NotificationsContext = createContext({ unreadCount: 0, chatCount: 0, answerCount: 0, unreadChatIds: new Set() })
 
 export function NotificationsProvider({ children }) {
   const { user } = useAuth()
@@ -24,12 +24,13 @@ export function NotificationsProvider({ children }) {
     })
   }, [user?.uid])
 
-  const chatCount   = unread.filter(n => n.type === 'chat').length
-  const answerCount = unread.filter(n => n.type === 'answer').length
-  const unreadCount = unread.length
+  const chatCount    = unread.filter(n => n.type === 'chat').length
+  const answerCount  = unread.filter(n => n.type === 'answer').length
+  const unreadCount  = unread.length
+  const unreadChatIds = new Set(unread.filter(n => n.type === 'chat').map(n => n.relatedId))
 
   return (
-    <NotificationsContext.Provider value={{ unreadCount, chatCount, answerCount }}>
+    <NotificationsContext.Provider value={{ unreadCount, chatCount, answerCount, unreadChatIds }}>
       {children}
     </NotificationsContext.Provider>
   )

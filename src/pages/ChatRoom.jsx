@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Send, ChevronDown, MoreVertical } from 'lucide-react'
 import {
   doc, getDoc, getDocs, addDoc, updateDoc,
   collection, query, where, orderBy, onSnapshot,
@@ -9,6 +9,7 @@ import {
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import ReportModal from '../components/ReportModal'
 const STATUS_OPTIONS = ['판매중', '예약중', '거래완료']
 
 const fmtTime = (ts) => {
@@ -54,7 +55,7 @@ function DateDivider({ date }) {
 export default function ChatRoom() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, banInfo } = useAuth()
   const ME = user?.uid ?? 'me'
 
   const [chatId, setChatId]               = useState(null)
@@ -66,6 +67,8 @@ export default function ChatRoom() {
   const [productStatus, setProductStatus] = useState('판매중')
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [loading, setLoading]             = useState(true)
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false)
+  const [showReport, setShowReport]       = useState(false)
 
   const scrollRef = useRef(null)
   const inputRef  = useRef(null)
@@ -170,7 +173,7 @@ export default function ChatRoom() {
   }, [messages])
 
   const sendMessage = async () => {
-    if (!inputText.trim() || !chatId) return
+    if (!inputText.trim() || !chatId || banInfo?.isBanned) return
     const text = inputText.trim()
     setInputText('')
     inputRef.current?.focus()
@@ -237,9 +240,40 @@ export default function ChatRoom() {
         }}>
           🧶
         </div>
-        <span style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', flex: 1 }}>
           {otherName}
         </span>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowHeaderMenu(v => !v)}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+          >
+            <MoreVertical size={20} color={C.gray} strokeWidth={1.8} />
+          </button>
+          {showHeaderMenu && (
+            <>
+              <div onClick={() => setShowHeaderMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                background: C.white, borderRadius: 12,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                overflow: 'hidden', minWidth: 120,
+              }}>
+                <button
+                  onClick={() => { setShowReport(true); setShowHeaderMenu(false) }}
+                  style={{
+                    display: 'block', width: '100%', padding: '12px 16px',
+                    textAlign: 'left', border: 'none',
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 14, color: '#E53E3E', background: C.white,
+                  }}
+                >
+                  신고하기
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
       {/* 거래 상품 카드 */}
@@ -372,6 +406,15 @@ export default function ChatRoom() {
           <Send size={17} color={C.white} strokeWidth={2} />
         </button>
       </div>
+
+      {showReport && (
+        <ReportModal
+          targetType="chat"
+          targetId={chatId ?? ''}
+          reportedId={otherUid ?? ''}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </div>
   )
 }

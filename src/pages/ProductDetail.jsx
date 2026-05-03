@@ -5,6 +5,7 @@ import { doc, getDoc, deleteDoc } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import ReportModal from '../components/ReportModal'
 
 function DeleteModal({ onConfirm, onCancel }) {
   return (
@@ -52,6 +53,7 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showReport, setShowReport] = useState(false)
 
   useEffect(() => {
     const fetch = async () => {
@@ -159,7 +161,7 @@ export default function ProductDetail() {
             </p>
           </div>
 
-          {isOwner && (
+          {(isOwner || (user && !isOwner)) && (
             <div style={{ marginLeft: 'auto', position: 'relative' }}>
               <button
                 onClick={() => setShowMenu(v => !v)}
@@ -176,29 +178,45 @@ export default function ProductDetail() {
                     boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                     overflow: 'hidden', minWidth: 120,
                   }}>
-                    <button
-                      onClick={() => { navigate(`/write?edit=${id}`); setShowMenu(false) }}
-                      style={{
-                        display: 'block', width: '100%', padding: '12px 16px',
-                        textAlign: 'left', border: 'none',
-                        borderBottom: `1px solid ${C.border}`,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        fontSize: 14, color: C.text, background: C.white,
-                      }}
-                    >
-                      수정하기
-                    </button>
-                    <button
-                      onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
-                      style={{
-                        display: 'block', width: '100%', padding: '12px 16px',
-                        textAlign: 'left', border: 'none',
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        fontSize: 14, color: '#E53E3E', background: C.white,
-                      }}
-                    >
-                      삭제하기
-                    </button>
+                    {isOwner ? (
+                      <>
+                        <button
+                          onClick={() => { navigate(`/write?edit=${id}`); setShowMenu(false) }}
+                          style={{
+                            display: 'block', width: '100%', padding: '12px 16px',
+                            textAlign: 'left', border: 'none',
+                            borderBottom: `1px solid ${C.border}`,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 14, color: C.text, background: C.white,
+                          }}
+                        >
+                          수정하기
+                        </button>
+                        <button
+                          onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
+                          style={{
+                            display: 'block', width: '100%', padding: '12px 16px',
+                            textAlign: 'left', border: 'none',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 14, color: '#E53E3E', background: C.white,
+                          }}
+                        >
+                          삭제하기
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => { setShowReport(true); setShowMenu(false) }}
+                        style={{
+                          display: 'block', width: '100%', padding: '12px 16px',
+                          textAlign: 'left', border: 'none',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          fontSize: 14, color: '#E53E3E', background: C.white,
+                        }}
+                      >
+                        신고하기
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -288,6 +306,14 @@ export default function ProductDetail() {
         <DeleteModal
           onConfirm={handleDelete}
           onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+      {showReport && (
+        <ReportModal
+          targetType="product"
+          targetId={id}
+          reportedId={product.uid}
+          onClose={() => setShowReport(false)}
         />
       )}
     </div>
