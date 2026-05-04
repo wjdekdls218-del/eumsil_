@@ -14,7 +14,7 @@ export function PostsProvider({ children }) {
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(p => !p.hidden))
       setLoading(false)
     })
     return unsubscribe

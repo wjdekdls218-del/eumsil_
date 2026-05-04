@@ -59,7 +59,10 @@ export default function ProductDetail() {
     const fetch = async () => {
       try {
         const snap = await getDoc(doc(db, 'posts', id))
-        if (snap.exists()) setProduct({ id: snap.id, ...snap.data() })
+        if (snap.exists()) {
+          const data = snap.data()
+          if (!data.hidden) setProduct({ id: snap.id, ...data })
+        }
       } finally {
         setLoading(false)
       }

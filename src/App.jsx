@@ -21,9 +21,16 @@ import Notice from './pages/Notice'
 import Notifications from './pages/Notifications'
 import MyReviews from './pages/MyReviews'
 import ProfileEdit from './pages/ProfileEdit'
-import Admin from './pages/Admin'
-import AdminReport from './pages/AdminReport'
 import BannedScreen from './pages/BannedScreen'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminReports from './pages/admin/AdminReports'
+import AdminReportDetail from './pages/admin/AdminReportDetail'
+import AdminPosts from './pages/admin/AdminPosts'
+import AdminPostDetail from './pages/admin/AdminPostDetail'
+import AdminCommunity from './pages/admin/AdminCommunity'
+import AdminCommunityDetail from './pages/admin/AdminCommunityDetail'
+import AdminNotices from './pages/admin/AdminNotices'
+import AdminNoticeWrite from './pages/admin/AdminNoticeWrite'
 
 function AppContent() {
   const { user, banInfo } = useAuth()
@@ -59,8 +66,16 @@ function AppContent() {
         <Route path="/write"           element={<PrivateRoute><Write /></PrivateRoute>} />
 
         {/* 관리자 페이지 */}
-        <Route path="/admin"             element={<AdminRoute><Admin /></AdminRoute>} />
-        <Route path="/admin/report/:id"  element={<AdminRoute><AdminReport /></AdminRoute>} />
+        <Route path="/admin"                    element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/reports"            element={<AdminRoute><AdminReports /></AdminRoute>} />
+        <Route path="/admin/reports/:id"        element={<AdminRoute><AdminReportDetail /></AdminRoute>} />
+        <Route path="/admin/posts"              element={<AdminRoute><AdminPosts /></AdminRoute>} />
+        <Route path="/admin/posts/:id"          element={<AdminRoute><AdminPostDetail /></AdminRoute>} />
+        <Route path="/admin/community"          element={<AdminRoute><AdminCommunity /></AdminRoute>} />
+        <Route path="/admin/community/:id"      element={<AdminRoute><AdminCommunityDetail /></AdminRoute>} />
+        <Route path="/admin/notices"            element={<AdminRoute><AdminNotices /></AdminRoute>} />
+        <Route path="/admin/notices/write"      element={<AdminRoute><AdminNoticeWrite /></AdminRoute>} />
+        <Route path="/admin/notices/:id"        element={<AdminRoute><AdminNoticeWrite /></AdminRoute>} />
       </Routes>
     </BrowserRouter>
   )
