@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { C, FONT } from '../theme'
@@ -10,9 +10,10 @@ const fmtDate = (ts) =>
 
 export default function Notice() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [notices, setNotices] = useState([])
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(null)
+  const [expanded, setExpanded] = useState(searchParams.get('id') ?? null)
 
   useEffect(() => {
     const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'))
@@ -29,7 +30,7 @@ export default function Notice() {
   })
 
   return (
-    <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
+    <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
       <header style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '16px', borderBottom: `1px solid ${C.border}`,
@@ -97,7 +98,7 @@ export default function Notice() {
                     lineHeight: 1.85, letterSpacing: '-0.01em',
                     whiteSpace: 'pre-line',
                   }}>
-                    {notice.body}
+                    {notice.content || notice.body}
                   </p>
                 </div>
               )}

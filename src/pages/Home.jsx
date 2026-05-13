@@ -1,14 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell } from 'lucide-react'
+import { Bell, X } from 'lucide-react'
+import { collection, getDocs } from 'firebase/firestore'
 import { C, FONT } from '../theme'
+import { db } from '../firebase'
 import { usePosts } from '../context/PostsContext'
 import { useNotifications } from '../context/NotificationsContext'
-
-const FAQ_ITEMS = [
-  { id: 1, title: '울 실과 아크릴 실 차이가 뭔가요?',         answerCount: 12 },
-  { id: 2, title: '코바늘 입문자에게 추천하는 실 굵기는요?',  answerCount: 8  },
-]
 
 // ─── 아이콘 ───────────────────────────────────────────────────
 const SearchIcon = () => (
@@ -294,6 +291,61 @@ function FAQSection({ items }) {
   )
 }
 
+// ─── NoticePopup ──────────────────────────────────────────────
+function NoticePopup({ notice, onClose, onDismissToday, onGoTo }) {
+  const previewLine = (notice.content || notice.body || '').split('\n')[0]
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '0 24px',
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 270, background: '#FFFFFF',
+        borderRadius: 20, overflow: 'hidden',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
+        fontFamily: FONT,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 14px 0' }}>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 2 }}>
+            <X size={20} color="#9E9E9E" strokeWidth={2} />
+          </button>
+        </div>
+        <div style={{ padding: '8px 20px 24px', textAlign: 'center' }}>
+          <p style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>
+            {notice.title}
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: '#777', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {previewLine}
+          </p>
+        </div>
+        <div style={{ display: 'flex', borderTop: '1px solid #F0F0F0' }}>
+          <button
+            onClick={onDismissToday}
+            style={{
+              flex: 1, padding: '14px 0', border: 'none', background: 'transparent',
+              fontSize: 13, color: '#9E9E9E', cursor: 'pointer', fontFamily: FONT,
+              borderRight: '1px solid #F0F0F0',
+            }}
+          >
+            오늘 하루 보지 않기
+          </button>
+          <button
+            onClick={onGoTo}
+            style={{
+              flex: 1, padding: '14px 0', border: 'none', background: 'transparent',
+              fontSize: 14, fontWeight: 700, color: C.point, cursor: 'pointer', fontFamily: FONT,
+            }}
+          >
+            보러가기
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Home ─────────────────────────────────────────────────────
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -301,6 +353,53 @@ export default function Home() {
   const navigate = useNavigate()
   const { unreadCount } = useNotifications()
   const filter = searchParams.get('filter') || 'all'
+  const [popup, setPopup] = useState(null)
+  const [faqItems, setFaqItems] = useState([])
+
+  // 인기 질문 로드 (점수 = answerCount×0.5 + likes×0.5)
+  useEffect(() => {
+    getDocs(collection(db, 'community'))
+      .then(snap => {
+        const scored = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .map(item => ({
+            ...item,
+            score: (item.answerCount ?? 0) * 0.5 + (item.likes ?? 0) * 0.5,
+          }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 2)
+        setFaqItems(scored)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const now = new Date()
+    const todayKey = `popup_dismiss_${now.toISOString().slice(0, 10)}`
+    console.log('[팝업] todayKey:', todayKey, '/ dismissed:', !!localStorage.getItem(todayKey))
+    if (localStorage.getItem(todayKey)) return
+
+    getDocs(collection(db, 'notices'))
+      .then(snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        console.log('[팝업] 전체 notices:', all.length, '개', all.map(n => ({ id: n.id, title: n.title, showPopup: n.showPopup, popupStart: n.popupStart, popupEnd: n.popupEnd })))
+
+        const withPopup = all.filter(n => n.showPopup === true)
+        console.log('[팝업] showPopup:true 공지:', withPopup.length, '개', withPopup.map(n => n.title))
+
+        const active = withPopup.find(n => {
+          const start = n.popupStart?.toDate?.() ?? null
+          const end   = n.popupEnd?.toDate?.() ?? null
+          console.log(`[팝업] "${n.title}" → start:${start}, end:${end}, now:${now}, 통과:${!(start && now < start) && !(end && now > end)}`)
+          if (start && now < start) return false
+          if (end && now > end) return false
+          return true
+        })
+        console.log('[팝업] 최종 선택된 공지:', active?.title ?? '없음')
+        if (active) setPopup(active)
+      })
+      .catch(err => console.error('[팝업] Firestore 로드 실패:', err))
+  }, [])
 
   const handleFilter = (next) => {
     setSearchParams({ filter: next })
@@ -314,11 +413,17 @@ export default function Home() {
 
   const shareItems = posts.filter(p => p.type === 'share').slice(0, 5)
   const showShare  = filter !== 'sell' && shareItems.length > 0
-  const showFAQ    = filter === 'all'
+  const showFAQ    = filter === 'all' && faqItems.length > 0
+
+  const handleDismissToday = () => {
+    const key = `popup_dismiss_${new Date().toISOString().slice(0, 10)}`
+    localStorage.setItem(key, '1')
+    setPopup(null)
+  }
 
   return (
     <div style={{
-      maxWidth: 390, margin: '0 auto', minHeight: '100dvh',
+      maxWidth: 430, margin: '0 auto', minHeight: '100dvh',
       background: C.bg, fontFamily: FONT, position: 'relative',
     }}>
       {/* 스티키 헤더 */}
@@ -354,8 +459,17 @@ export default function Home() {
       <main style={{ display: 'flex', flexDirection: 'column', gap: 28, paddingTop: 8, paddingBottom: 110 }}>
         {showShare && <ShareSection items={shareItems} />}
         <LatestSection items={filteredLatest} />
-        {showFAQ && <FAQSection items={FAQ_ITEMS} />}
+        {showFAQ && <FAQSection items={faqItems} />}
       </main>
+
+      {popup && (
+        <NoticePopup
+          notice={popup}
+          onClose={() => setPopup(null)}
+          onDismissToday={handleDismissToday}
+          onGoTo={() => { setPopup(null); navigate(`/notices?id=${popup.id}`) }}
+        />
+      )}
     </div>
   )
 }
