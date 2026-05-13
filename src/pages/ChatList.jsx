@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
@@ -23,6 +23,8 @@ export default function ChatList() {
   const { user } = useAuth()
   const { unreadChatIds } = useNotifications()
   const [chats, setChats] = useState([])
+  const [userPhotos, setUserPhotos] = useState({})
+  const [userNames, setUserNames] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function ChatList() {
       collection(db, 'chats'),
       where('participants', 'array-contains', user.uid)
     )
-    return onSnapshot(q, (snap) => {
+    return onSnapshot(q, async (snap) => {
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => {
@@ -41,11 +43,27 @@ export default function ChatList() {
         })
       setChats(list)
       setLoading(false)
+
+      // 상대방 uid 목록 추출 후 프로필 일괄 로드
+      const otherUids = [...new Set(
+        list.flatMap(c => (c.participants ?? []).filter(p => p !== user.uid))
+      )].filter(Boolean)
+      if (!otherUids.length) return
+      const results = await Promise.all(
+        otherUids.map(uid =>
+          getDoc(doc(db, 'users', uid)).then(s => {
+            const data = s.exists() ? s.data() : {}
+            return { uid, photo: data.photoURL ?? null, nickname: data.displayName ?? '상대방' }
+          })
+        )
+      )
+      setUserPhotos(Object.fromEntries(results.map(r => [r.uid, r.photo])))
+      setUserNames(Object.fromEntries(results.map(r => [r.uid, r.nickname])))
     }, () => setLoading(false))
   }, [])
 
   return (
-    <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
+    <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
       <header style={{ padding: '20px 20px 12px', position: 'sticky', top: 0, background: C.bg, zIndex: 50 }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>채팅</h1>
       </header>
@@ -60,7 +78,9 @@ export default function ChatList() {
             아직 채팅이 없어요.
           </div>
         ) : chats.map((room, i) => {
-          const otherName = room.otherName ?? (room.participants?.find(p => p !== 'me') ?? '상대방')
+          const otherUid = room.participants?.find(p => p !== user?.uid)
+          const otherName = (otherUid && userNames[otherUid]) ? userNames[otherUid] : (room.otherName ?? '상대방')
+          const photo = otherUid ? userPhotos[otherUid] : null
           const hasUnread = unreadChatIds.has(room.id)
           return (
             <div key={room.id}>
@@ -70,11 +90,13 @@ export default function ChatList() {
               >
                 <div style={{
                   width: 52, height: 52, borderRadius: 999,
-                  background: C.grayLight, flexShrink: 0,
+                  background: C.grayLight, flexShrink: 0, overflow: 'hidden',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 26,
                 }}>
-                  🧶
+                  {photo
+                    ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+                    : '🧶'}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
