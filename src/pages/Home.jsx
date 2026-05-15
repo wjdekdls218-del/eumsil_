@@ -60,8 +60,8 @@ function SearchBar() {
 function FilterTabs({ filter, onChange }) {
   const tabs = [
     { key: 'all',   label: '전체' },
-    { key: 'share', label: '나눠보기' },
-    { key: 'sell',  label: '실 올리기' },
+    { key: 'share', label: '나눔해요' },
+    { key: 'sell',  label: '주인을 찾아요' },
   ]
   return (
     <div style={{ display: 'flex', gap: 8 }}>

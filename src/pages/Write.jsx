@@ -128,7 +128,7 @@ export default function Write() {
     geocoder.coord2RegionCode(lng, lat, (result, status) => {
       if (status !== window.kakao.maps.services.Status.OK) return
       const region = result.find(r => r.region_type === 'H') || result.find(r => r.region_type === 'B')
-      if (region) setDisplayAddr(region.region_3depth_name || region.region_2depth_name)
+      if (region) setDisplayAddr(region.region_2depth_name)
     })
   }
 
@@ -178,6 +178,7 @@ export default function Write() {
     !isSellLowWeight
 
   const [uploading, setUploading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const uploadToCloudinary = async (base64Image) => {
     const formData = new FormData()
@@ -195,6 +196,7 @@ export default function Write() {
   const handleSubmit = async () => {
     if (!isValid || uploading || banInfo?.isBanned) return
     setUploading(true)
+    setSubmitError('')
     try {
       // Firestore users 컬렉션에서 최신 닉네임/프로필 이미지 가져오기
       let nickname = user?.displayName ?? '실뭉치'
@@ -231,7 +233,8 @@ export default function Write() {
       }
       navigate('/')
     } catch (e) {
-      console.error('업로드 실패:', e)
+      console.error('[Write] 저장 실패:', e)
+      setSubmitError('저장에 실패했어요. 다시 시도해주세요.')
       setUploading(false)
     }
   }
@@ -248,7 +251,7 @@ export default function Write() {
   }
 
   return (
-    <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
+    <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
 
       {/* ─── 헤더 */}
       <header style={{
@@ -280,6 +283,11 @@ export default function Write() {
 
       {/* ─── 본문 */}
       <div style={{ padding: '20px 16px 60px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {submitError && (
+          <p style={{ margin: 0, padding: '10px 14px', borderRadius: 10, background: '#FFE8E8', color: '#C53030', fontSize: 13, fontWeight: 600 }}>
+            {submitError}
+          </p>
+        )}
 
         {/* 사진 업로드 */}
         <div style={{ background: C.white, borderRadius: 16, padding: 16 }}>
@@ -333,7 +341,7 @@ export default function Write() {
         <div style={{ background: C.white, borderRadius: 16, padding: '14px 16px' }}>
           <p style={{ ...labelStyle, marginBottom: 10 }}>거래 유형</p>
           <div style={{ display: 'flex', gap: 8 }}>
-            {[{ key: 'share', label: '나눠보기' }, { key: 'sell', label: '실 올리기' }].map(t => (
+            {[{ key: 'share', label: '나눔해요' }, { key: 'sell', label: '주인을 찾아요' }].map(t => (
               <button key={t.key}
                 onClick={() => { setPostType(t.key); if (t.key === 'share') setPrice('') }}
                 style={{
@@ -452,7 +460,7 @@ export default function Write() {
           }}
         >
           <div style={{
-            width: '100%', maxWidth: 390,
+            width: '100%', maxWidth: 430,
             background: C.white,
             borderRadius: '20px 20px 0 0',
             overflow: 'hidden',

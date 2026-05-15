@@ -8,4 +8,4 @@ export const C = {
   border:    '#DDD5CB',
 }
 
-export const FONT = "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+export const FONT = "'MaruBuri', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
