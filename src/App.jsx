@@ -32,6 +32,7 @@ import AdminCommunityDetail from './pages/admin/AdminCommunityDetail'
 import AdminNotices from './pages/admin/AdminNotices'
 import AdminNoticeWrite from './pages/admin/AdminNoticeWrite'
 import AdminBanned from './pages/admin/AdminBanned'
+import DeliveryDetail from './pages/DeliveryDetail'
 import Seed from './pages/Seed'
 
 function AppContent() {
@@ -58,6 +59,7 @@ function AppContent() {
 
       {/* 단독 페이지 (로그인 필요) */}
       <Route path="/chat/:id"        element={<PrivateRoute><ChatRoom /></PrivateRoute>} />
+      <Route path="/delivery/:chatId" element={<PrivateRoute><DeliveryDetail /></PrivateRoute>} />
       <Route path="/community/write" element={<PrivateRoute><CommunityWrite /></PrivateRoute>} />
       <Route path="/settings"        element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/notices"           element={<Notice />} />

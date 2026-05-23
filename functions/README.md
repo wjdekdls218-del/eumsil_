@@ -26,11 +26,15 @@ functions/
 
 ### `checkDeliveryDeadlines`
 - **종류**: 스케줄 함수 (매일 오전 9시 KST 실행)
-- **역할**: 송장 미등록 거래를 체크해 알림 발송 및 자동 취소 처리
-- **로직**:
+- **역할**: 두 가지 자동화 작업을 순차 실행
+- **로직 ①** 송장 미등록 마감 체크 (`checkTrackingDeadlines`):
   - D+1 (24~36시간 경과): 판매자에게 발송 독촉 알림
   - D+2 (0~24시간 남음): 판매자에게 마감 임박 알림
   - D+2 초과 + 연장 없음: 거래 자동 취소 + 양측 알림
+- **로직 ②** 발송 후 장기 미완료 자동 처리 (`autoCompleteShipped`):
+  - 대상: `chatTradeStatus == 'trading'` + `deliveryType == 'parcel'` + `shippedAt` 14일 초과
+  - 처리: `chatTradeStatus = 'completed'` + 양측 알림
+  - (프론트 정책: 구매자는 언제든, 판매자는 발송 7일 후 수동 완료 가능 → 14일 뒤 자동 완료)
 
 ## Firestore 필드 의존성
 
