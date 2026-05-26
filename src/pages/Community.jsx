@@ -57,19 +57,22 @@ export default function Community() {
     : questions.filter(q => q.category === activeTab)
 
   return (
-    <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
-      {/* Header */}
-      <div style={{ padding: '22px 16px 0', background: C.bg }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, margin: 0, letterSpacing: '-0.03em' }}>
+    <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT }}>
+      {/* 스티키 헤더 */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        background: C.bg, padding: '20px 16px 12px',
+      }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: 0, letterSpacing: '-0.03em' }}>
           질문방
         </h1>
-        <p style={{ fontSize: 13, color: C.point, marginTop: 6, lineHeight: 1.6, fontWeight: 500, letterSpacing: '-0.01em' }}>
-          뜨다보면 생기는 고민<br />서로에게 물어봐요!
+        <p style={{ fontSize: 13, color: C.point, marginTop: 4, marginBottom: 14, fontWeight: 500, letterSpacing: '-0.01em' }}>
+          뜨다보면 생기는 고민, 서로에게 물어봐요!
         </p>
 
-        {/* Category tabs */}
+        {/* 카테고리 탭 */}
         <div style={{
-          display: 'flex', gap: 6, marginTop: 14, marginBottom: 16,
+          display: 'flex', gap: 6,
           overflowX: 'auto', paddingBottom: 2,
           scrollbarWidth: 'none', msOverflowStyle: 'none',
         }}>
@@ -92,10 +95,10 @@ export default function Community() {
             </button>
           ))}
         </div>
-      </div>
+      </header>
 
-      {/* Question cards */}
-      <div style={{ padding: '0 16px 120px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* 질문 카드 목록 */}
+      <div style={{ padding: '4px 16px 110px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: C.gray, fontSize: 14 }}>
             아직 질문이 없어요.<br />첫 번째로 질문해보세요!
@@ -153,7 +156,7 @@ export default function Community() {
       <div style={{
         position: 'fixed', bottom: 0,
         left: '50%', transform: 'translateX(-50%)',
-        width: '100%', maxWidth: 390,
+        width: '100%', maxWidth: 430,
         height: 0, pointerEvents: 'none', zIndex: 99,
       }}>
         <button
