@@ -68,12 +68,14 @@ export default function BottomNav() {
     <nav style={{
       position: 'fixed', bottom: 0,
       left: '50%', transform: 'translateX(-50%)',
-      width: '100%', maxWidth: 390,
+      width: '100%', maxWidth: 430,
       background: C.white,
       borderTop: `1px solid ${C.border}`,
       display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-      padding: '10px 4px',
+      paddingTop: 10,
       paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+      paddingLeft: 'max(12px, env(safe-area-inset-left))',
+      paddingRight: 'max(12px, env(safe-area-inset-right))',
       zIndex: 100,
     }}>
       {tabs.map((tab) => {
