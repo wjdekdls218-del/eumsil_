@@ -95,7 +95,14 @@ export default function ProductDetail() {
   }
 
   const imageUrl = product.imageUrl || product.image
-  const date = product.createdAt?.toDate().toLocaleDateString('ko-KR') ?? ''
+  // navigate state로 전달된 경우 Timestamp가 plain object로 직렬화되므로 양쪽 모두 처리
+  const toDate = (ts) => {
+    if (!ts) return null
+    if (typeof ts.toDate === 'function') return ts.toDate()      // Firestore Timestamp
+    if (ts.seconds != null) return new Date(ts.seconds * 1000)   // plain { seconds, nanoseconds }
+    return null
+  }
+  const date = toDate(product.createdAt)?.toLocaleDateString('ko-KR') ?? ''
   const isOwner = user?.uid && product.uid === user.uid
 
   const handleDelete = async () => {
