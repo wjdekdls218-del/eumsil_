@@ -97,6 +97,7 @@ async function checkTrackingDeadlines(now) {
     if (hoursLeft <= 0 && !isExtensionPending && !isExtended) {
       await collections.chats().doc(chatId).update({
         tradeStatus: "cancelled",
+        chatTradeStatus: "cancelled",          // UI에서 취소 상태 반영
         cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
         cancelReason: "발송 기한 초과 자동 취소",
       });

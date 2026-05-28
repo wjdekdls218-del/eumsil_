@@ -13,7 +13,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Package, MapPin, CheckCircle2, Clock } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Package, MapPin, CheckCircle2, Clock, AlertCircle, XCircle } from 'lucide-react'
 import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
@@ -102,11 +102,14 @@ export default function DeliveryDetail() {
     )
   }
 
-  const deliveryInfo  = chatData.deliveryInfo ?? {}
-  const isParcel      = deliveryInfo.deliveryType === 'parcel'
-  const isSeller      = chatData.sellerId === ME
-  const tradeStatus   = chatData.chatTradeStatus ?? 'chatting'
-  const isCompleted   = tradeStatus === 'completed'
+  const deliveryInfo    = chatData.deliveryInfo ?? {}
+  const isParcel        = deliveryInfo.deliveryType === 'parcel'
+  const isSeller        = chatData.sellerId === ME
+  const tradeStatus     = chatData.chatTradeStatus ?? 'chatting'
+  const isCompleted     = tradeStatus === 'completed'
+  const isCancelled     = tradeStatus === 'cancelled'
+  // 택배 거래이지만 아직 송장번호 미등록 상태
+  const isPendingTracking = isParcel && tradeStatus === 'trading' && !deliveryInfo.trackingNumber
 
   // 거래 완료 버튼 활성화 조건
   // - 구매자: 항상 누를 수 있음
@@ -210,29 +213,37 @@ export default function DeliveryDetail() {
             <>
               <div style={{ height: 1, background: C.border }} />
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <Row label="택배사" value={deliveryInfo.carrier ?? '-'} />
-                <Row label="송장번호" value={deliveryInfo.trackingNumber ?? '-'} mono />
-              </div>
+              {isPendingTracking ? (
+                <p style={{ margin: 0, fontSize: 13, color: C.gray, lineHeight: 1.5 }}>
+                  판매자가 송장번호를 등록하면 여기에 표시돼요.
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Row label="택배사" value={deliveryInfo.carrier ?? '-'} />
+                    <Row label="송장번호" value={deliveryInfo.trackingNumber ?? '-'} mono />
+                  </div>
 
-              {/* 배송 조회 버튼 */}
-              {trackingUrl && (
-                <a
-                  href={trackingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    marginTop: 4,
-                    padding: '11px 0', borderRadius: 10,
-                    background: C.point, color: C.white,
-                    fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em',
-                    textDecoration: 'none',
-                  }}
-                >
-                  <ExternalLink size={15} strokeWidth={2} />
-                  배송 조회하기
-                </a>
+                  {/* 배송 조회 버튼 */}
+                  {trackingUrl && (
+                    <a
+                      href={trackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        marginTop: 4,
+                        padding: '11px 0', borderRadius: 10,
+                        background: C.point, color: C.white,
+                        fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <ExternalLink size={15} strokeWidth={2} />
+                      배송 조회하기
+                    </a>
+                  )}
+                </>
               )}
             </>
           )}
@@ -246,6 +257,32 @@ export default function DeliveryDetail() {
               <span style={{ fontSize: 15, fontWeight: 700, color: '#4CAF50', letterSpacing: '-0.02em' }}>
                 거래 완료됐어요!
               </span>
+            </div>
+          ) : isCancelled ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <XCircle size={20} color="#E53E3E" strokeWidth={1.8} />
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#E53E3E', letterSpacing: '-0.02em', display: 'block' }}>
+                  거래가 취소됐어요
+                </span>
+                <span style={{ fontSize: 12, color: C.gray, letterSpacing: '-0.01em' }}>
+                  발송 기한 내 송장이 등록되지 않았어요.
+                </span>
+              </div>
+            </div>
+          ) : isPendingTracking ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <AlertCircle size={20} color="#F59E0B" strokeWidth={1.8} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
+                  송장번호 등록 대기 중
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: C.gray, lineHeight: 1.5, letterSpacing: '-0.01em' }}>
+                {isSeller
+                  ? '채팅방에서 송장번호를 등록하면 구매자에게 배송 정보가 공유돼요.'
+                  : '판매자가 아직 송장번호를 등록하지 않았어요. 조금만 기다려주세요!'}
+              </p>
             </div>
           ) : tradeStatus === 'trading' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

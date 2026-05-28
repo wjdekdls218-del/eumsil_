@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, ChevronDown, MoreVertical } from 'lucide-react'
+import { ArrowLeft, Send, ChevronDown, MoreVertical, Clock } from 'lucide-react'
 import {
   doc, getDoc, getDocs, addDoc, updateDoc,
   collection, query, where, orderBy, onSnapshot,
-  serverTimestamp,
+  serverTimestamp, Timestamp,
 } from 'firebase/firestore'
 import { C, FONT } from '../theme'
 import { db } from '../firebase'
@@ -59,15 +59,13 @@ function DateDivider({ date }) {
 
 /**
  * 거래 방식 선택 모달 (판매자 전용)
- * - 직거래: 송장번호 없이 진행
- * - 택배: 택배사 + 송장번호 입력 필수
+ *
+ * [변경] 택배 거래 선택 시 송장번호를 바로 입력하지 않음.
+ * 거래 시작 후 48시간 내에 별도 "송장 등록" 버튼으로 등록.
+ * → Cloud Functions 스케줄러가 D+1/D+2 알림, 기한 초과 자동 취소 처리.
  */
 function TradeModal({ onClose, onConfirm }) {
-  const [deliveryType, setDeliveryType] = useState('parcel') // parcel | direct
-  const [carrier, setCarrier] = useState('')
-  const [trackingNumber, setTrackingNumber] = useState('')
-
-  const isValid = deliveryType === 'direct' || (carrier && trackingNumber.trim())
+  const [deliveryType, setDeliveryType] = useState('parcel')
 
   return (
     <div
@@ -98,8 +96,8 @@ function TradeModal({ onClose, onConfirm }) {
           </button>
         </div>
 
-        {/* 직거래 / 택배 선택 */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {/* 택배 / 직거래 탭 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {[
             { key: 'parcel', label: '📦 택배 거래' },
             { key: 'direct', label: '🤝 직접 만나기로 했어요' },
@@ -121,42 +119,19 @@ function TradeModal({ onClose, onConfirm }) {
           ))}
         </div>
 
-        {/* 택배사 + 송장번호 (택배 선택 시) */}
+        {/* 택배 안내: 송장번호는 나중에 등록 */}
         {deliveryType === 'parcel' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-            <div>
-              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: C.gray }}>택배사 선택</p>
-              <select
-                value={carrier}
-                onChange={e => setCarrier(e.target.value)}
-                style={{
-                  width: '100%', padding: '12px 14px', borderRadius: 12,
-                  border: `1.5px solid ${C.border}`, background: C.white,
-                  fontFamily: FONT, fontSize: 14, color: carrier ? C.text : C.gray,
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-              >
-                <option value="">택배사를 선택해주세요</option>
-                {CARRIERS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: C.gray }}>
-                송장번호 <span style={{ color: '#E53E3E' }}>*</span>
-              </p>
-              <input
-                type="text"
-                placeholder="송장번호를 입력해주세요"
-                value={trackingNumber}
-                onChange={e => setTrackingNumber(e.target.value)}
-                style={{
-                  width: '100%', padding: '12px 14px', borderRadius: 12,
-                  border: `1.5px solid ${C.border}`, background: C.white,
-                  fontFamily: FONT, fontSize: 14, color: C.text,
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-              />
-            </div>
+          <div style={{
+            padding: '14px 16px', borderRadius: 12,
+            background: '#FFF8E7', marginBottom: 20,
+            border: '1px solid #FFE082',
+          }}>
+            <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#B8860B' }}>
+              📋 거래 시작 후 48시간 내에 송장번호를 등록해주세요
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: '#B8860B', lineHeight: 1.5 }}>
+              기한 내 미등록 시 거래가 자동 취소될 수 있어요.
+            </p>
           </div>
         )}
 
@@ -173,7 +148,98 @@ function TradeModal({ onClose, onConfirm }) {
         )}
 
         <button
-          onClick={() => isValid && onConfirm({ deliveryType, carrier, trackingNumber: trackingNumber.trim() })}
+          onClick={() => onConfirm({ deliveryType })}
+          style={{
+            width: '100%', padding: '15px 0', borderRadius: 999,
+            background: C.point, color: C.white, border: 'none',
+            fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          거래 시작
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 송장번호 등록 모달 (판매자 전용 — 거래 시작 후 별도 등록)
+ *
+ * 거래 수락(TradeModal) → 48시간 내 이 모달로 택배사 + 송장번호 입력
+ * → Cloud Functions 스케줄러 D+1/D+2 알림 대상에서 제외됨
+ */
+function TrackingModal({ onClose, onConfirm }) {
+  const [carrier, setCarrier] = useState('')
+  const [trackingNumber, setTrackingNumber] = useState('')
+  const isValid = carrier && trackingNumber.trim()
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 430, background: C.white,
+          borderRadius: '20px 20px 0 0', padding: '24px 20px 40px',
+          fontFamily: FONT,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>
+            송장번호 등록
+          </h3>
+          <button
+            onClick={onClose}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 22, color: C.gray, padding: 0, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+          <div>
+            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: C.gray }}>택배사 선택</p>
+            <select
+              value={carrier}
+              onChange={e => setCarrier(e.target.value)}
+              style={{
+                width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: `1.5px solid ${C.border}`, background: C.white,
+                fontFamily: FONT, fontSize: 14, color: carrier ? C.text : C.gray,
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            >
+              <option value="">택배사를 선택해주세요</option>
+              {CARRIERS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: C.gray }}>
+              송장번호 <span style={{ color: '#E53E3E' }}>*</span>
+            </p>
+            <input
+              type="text"
+              placeholder="송장번호를 입력해주세요"
+              value={trackingNumber}
+              onChange={e => setTrackingNumber(e.target.value)}
+              style={{
+                width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: `1.5px solid ${C.border}`, background: C.white,
+                fontFamily: FONT, fontSize: 14, color: C.text,
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => isValid && onConfirm({ carrier, trackingNumber: trackingNumber.trim() })}
           disabled={!isValid}
           style={{
             width: '100%', padding: '15px 0', borderRadius: 999,
@@ -184,7 +250,7 @@ function TradeModal({ onClose, onConfirm }) {
             transition: 'background 0.15s',
           }}
         >
-          확인
+          등록하기
         </button>
       </div>
     </div>
@@ -197,49 +263,86 @@ export default function ChatRoom() {
   const { user, banInfo } = useAuth()
   const ME = user?.uid ?? 'me'
 
-  const [chatId, setChatId]                 = useState(null)
-  const [product, setProduct]               = useState(null)
-  const [otherName, setOtherName]           = useState('상대방')
-  const [otherUid, setOtherUid]             = useState(null)
-  const [otherPhoto, setOtherPhoto]         = useState(null)
-  const [messages, setMessages]             = useState([])
-  const [inputText, setInputText]           = useState('')
-  const [productStatus, setProductStatus]   = useState('판매중')
-  const [showStatusMenu, setShowStatusMenu] = useState(false)
-  const [loading, setLoading]               = useState(true)
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false)
-  const [showReport, setShowReport]         = useState(false)
+  const [chatId, setChatId]                   = useState(null)
+  const [product, setProduct]                 = useState(null)
+  const [otherName, setOtherName]             = useState('상대방')
+  const [otherUid, setOtherUid]               = useState(null)
+  const [otherPhoto, setOtherPhoto]           = useState(null)
+  const [messages, setMessages]               = useState([])
+  const [inputText, setInputText]             = useState('')
+  const [productStatus, setProductStatus]     = useState('판매중')
+  const [showStatusMenu, setShowStatusMenu]   = useState(false)
+  const [loading, setLoading]                 = useState(true)
+  const [showHeaderMenu, setShowHeaderMenu]   = useState(false)
+  const [showReport, setShowReport]           = useState(false)
 
-  // 채팅 거래 상태
-  // chatting  : 대화중 (기본값)
-  // trading   : 거래중 (판매자가 송장 등록 또는 직거래 선택한 상태)
-  // completed : 거래완료
+  // ─── 거래 상태 ────────────────────────────────────────────────
+  // chatTradeStatus : chatting | trading | completed   → UI 표시용
+  // tradeStatus     : pending | shipped | cancelled    → Cloud Functions 스케줄러용
+  //   - pending  : 택배 거래 시작, 아직 송장 미등록
+  //   - shipped  : 송장 등록 완료 (스케줄러 체크 대상에서 제외)
+  //   - cancelled: 기한 초과 자동 취소
   const [chatTradeStatus, setChatTradeStatus] = useState('chatting')
+  const [tradeStatus, setTradeStatus]         = useState(null)
   const [deliveryInfo, setDeliveryInfo]       = useState(null)
+  const [trackingDeadline, setTrackingDeadline] = useState(null)
+  const [timeLeft, setTimeLeft]               = useState(null)
   const [showTradeModal, setShowTradeModal]   = useState(false)
+  const [showTrackingModal, setShowTrackingModal] = useState(false)
 
   const scrollRef    = useRef(null)
   const inputRef     = useRef(null)
   const isSendingRef = useRef(false)
 
-  // 판매자 여부: 게시글 작성자(uid)가 나인 경우
+  // 판매자 여부
   const isSeller = product?.uid === ME
 
+  // 송장 미등록 여부 (택배 거래중 + 아직 송장번호 없음)
+  const isPendingTracking =
+    chatTradeStatus === 'trading' &&
+    deliveryInfo?.deliveryType === 'parcel' &&
+    !deliveryInfo?.trackingNumber
+
   // 거래완료 버튼 활성화 조건
-  // - 구매자: 거래중 상태이면 항상 가능
-  // - 판매자: 배송 등록 후 7일 경과 시에만 가능 (구매자 미응답 보호)
-  // - 직거래: 판매자도 즉시 완료 가능
+  // - 구매자: 거래중이면 항상 가능
+  // - 판매자: 직거래는 즉시 / 택배는 송장 등록 후 7일 경과 시
   const canComplete = (() => {
     if (chatTradeStatus !== 'trading') return false
     if (deliveryInfo?.deliveryType === 'direct') return true
     if (!isSeller) return true
-    const shippedAt = deliveryInfo?.shippedAt?.toDate?.() ?? null
+    const s = deliveryInfo?.shippedAt
+    if (!s) return false
+    const shippedAt = typeof s.toDate === 'function' ? s.toDate()
+      : s.seconds ? new Date(s.seconds * 1000) : null
     if (!shippedAt) return false
-    const daysSince = (Date.now() - shippedAt.getTime()) / (1000 * 60 * 60 * 24)
-    return daysSince >= 7
+    return (Date.now() - shippedAt.getTime()) / (1000 * 60 * 60 * 24) >= 7
   })()
 
-  // 채팅방 초기화 (chatId 또는 productId로 진입)
+  // ─── 남은 시간 타이머 ─────────────────────────────────────────
+  useEffect(() => {
+    if (!trackingDeadline || !isPendingTracking) { setTimeLeft(null); return }
+
+    const getDate = () => {
+      if (typeof trackingDeadline.toDate === 'function') return trackingDeadline.toDate()
+      if (trackingDeadline.seconds) return new Date(trackingDeadline.seconds * 1000)
+      return null
+    }
+
+    const update = () => {
+      const deadline = getDate()
+      if (!deadline) return
+      const msLeft = deadline - Date.now()
+      if (msLeft <= 0) { setTimeLeft('마감 초과'); return }
+      const h = Math.floor(msLeft / (1000 * 60 * 60))
+      const m = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60))
+      setTimeLeft(`${h}시간 ${m}분`)
+    }
+    update()
+    const timer = setInterval(update, 60000)
+    return () => clearInterval(timer)
+  }, [trackingDeadline, isPendingTracking])
+
+  // ─── 채팅방 초기화 ────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
 
@@ -247,16 +350,16 @@ export default function ChatRoom() {
       const chatSnap = await getDoc(doc(db, 'chats', id))
 
       if (chatSnap.exists()) {
-        // id가 chatId인 경우
         const data = chatSnap.data()
         if (cancelled) return
         setChatId(id)
         const uid = data.participants?.find(p => p !== ME) ?? null
         setOtherUid(uid)
 
-        // 거래 상태 로드
-        if (data.chatTradeStatus) setChatTradeStatus(data.chatTradeStatus)
-        if (data.deliveryInfo)    setDeliveryInfo(data.deliveryInfo)
+        if (data.chatTradeStatus)  setChatTradeStatus(data.chatTradeStatus)
+        if (data.deliveryInfo)     setDeliveryInfo(data.deliveryInfo)
+        if (data.tradeStatus)      setTradeStatus(data.tradeStatus)
+        if (data.trackingDeadline) setTrackingDeadline(data.trackingDeadline)
 
         if (data.productId) {
           const prodSnap = await getDoc(doc(db, 'posts', data.productId))
@@ -268,7 +371,7 @@ export default function ChatRoom() {
         }
         if (!cancelled) setLoading(false)
       } else {
-        // id가 productId인 경우 — 기존 채팅 조회 또는 새로 생성
+        // productId로 진입 — 기존 채팅 조회 또는 신규 생성
         const productId = id
         const prodSnap = await getDoc(doc(db, 'posts', productId))
         if (cancelled) return
@@ -278,7 +381,7 @@ export default function ChatRoom() {
           setProduct(p)
           setProductStatus(p.status ?? '판매중')
 
-          const sellerId = p.uid  // 게시글 작성자 = 판매자
+          const sellerId = p.uid
           setOtherUid(sellerId)
 
           const q = query(
@@ -293,8 +396,7 @@ export default function ChatRoom() {
           if (!existing.empty) {
             resolvedChatId = existing.docs[0].id
           } else {
-            // 새 채팅 생성
-            // sellerId, buyerId는 Cloud Functions(스케줄러)에서 알림 발송에 사용됨
+            // sellerId, buyerId는 Cloud Functions 알림 발송에 사용됨
             const ref = await addDoc(collection(db, 'chats'), {
               productId,
               participants: [ME, sellerId],
@@ -326,19 +428,21 @@ export default function ChatRoom() {
     getDoc(doc(db, 'users', otherUid)).then(snap => {
       if (!snap.exists()) return
       const d = snap.data()
-      if (d.photoURL)     setOtherPhoto(d.photoURL)
-      if (d.displayName)  setOtherName(d.displayName)
+      if (d.photoURL)    setOtherPhoto(d.photoURL)
+      if (d.displayName) setOtherName(d.displayName)
     })
   }, [otherUid])
 
-  // 채팅 문서 실시간 구독 — 거래 상태 변경 감지 (양측 화면 동기화)
+  // 채팅 문서 실시간 구독 — 거래 상태 변경 양측 동기화
   useEffect(() => {
     if (!chatId) return
     return onSnapshot(doc(db, 'chats', chatId), (snap) => {
       if (!snap.exists()) return
       const data = snap.data()
-      if (data.chatTradeStatus) setChatTradeStatus(data.chatTradeStatus)
-      if (data.deliveryInfo)    setDeliveryInfo(data.deliveryInfo)
+      if (data.chatTradeStatus)            setChatTradeStatus(data.chatTradeStatus)
+      if (data.deliveryInfo)               setDeliveryInfo(data.deliveryInfo)
+      if (data.tradeStatus !== undefined)  setTradeStatus(data.tradeStatus)
+      if (data.trackingDeadline)           setTrackingDeadline(data.trackingDeadline)
     })
   }, [chatId])
 
@@ -379,22 +483,17 @@ export default function ChatRoom() {
     inputRef.current?.focus()
     try {
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        text,
-        senderId: ME,
-        createdAt: serverTimestamp(),
+        text, senderId: ME, createdAt: serverTimestamp(),
       })
       await updateDoc(doc(db, 'chats', chatId), {
-        lastMessage: text,
-        lastMessageTime: serverTimestamp(),
+        lastMessage: text, lastMessageTime: serverTimestamp(),
       })
       if (otherUid) {
         const senderName = user?.displayName || '누군가'
         addDoc(collection(db, 'notifications'), {
-          uid: otherUid,
-          type: 'chat',
+          uid: otherUid, type: 'chat',
           message: `${senderName}님이 메시지를 보냈어요`,
-          relatedId: chatId,
-          isRead: false,
+          relatedId: chatId, isRead: false,
           createdAt: serverTimestamp(),
         }).catch(err => console.error('[ChatRoom] 알림 생성 실패:', err))
       }
@@ -403,63 +502,91 @@ export default function ChatRoom() {
     }
   }
 
-  // 게시글 상태 변경 (판매중 / 예약중 / 거래완료)
   const handleStatusChange = async (s) => {
     setProductStatus(s)
     setShowStatusMenu(false)
-    if (product?.id) {
-      await updateDoc(doc(db, 'posts', product.id), { status: s })
-    }
+    if (product?.id) await updateDoc(doc(db, 'posts', product.id), { status: s })
   }
 
   /**
-   * 거래중 확정 (판매자 전용)
-   * - 직거래: deliveryType = 'direct', 송장번호 없음
-   * - 택배: deliveryType = 'parcel', 택배사 + 송장번호 저장
+   * 거래 방식 확정 (판매자 전용)
+   *
+   * 택배:
+   *   - chatTradeStatus = 'trading'
+   *   - tradeStatus = 'pending'  ← Cloud Functions 스케줄러가 이 상태 체크
+   *   - trackingDeadline = 지금 + 48시간
+   *   - 송장번호는 별도 handleTrackingRegister()로 등록
+   *
+   * 직거래:
+   *   - chatTradeStatus = 'trading'
+   *   - tradeStatus 없음 (스케줄러 대상 아님)
    */
-  const handleTradeConfirm = async ({ deliveryType, carrier, trackingNumber }) => {
+  const handleTradeConfirm = async ({ deliveryType }) => {
     if (!chatId) return
     setShowTradeModal(false)
 
-    const newDeliveryInfo = {
-      deliveryType,
-      carrier:        deliveryType === 'parcel' ? carrier       : null,
-      trackingNumber: deliveryType === 'parcel' ? trackingNumber : null,
-      shippedAt:      serverTimestamp(),
+    const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000)
+
+    const updates = {
+      chatTradeStatus: 'trading',
+      deliveryInfo:    { deliveryType },
+      tradeAcceptedAt: serverTimestamp(),
+    }
+    if (deliveryType === 'parcel') {
+      updates.tradeStatus      = 'pending'  // Cloud Functions 대상
+      updates.trackingDeadline = Timestamp.fromDate(deadline)
     }
 
-    await updateDoc(doc(db, 'chats', chatId), {
-      chatTradeStatus: 'trading',
-      deliveryInfo:    newDeliveryInfo,
-      tradeAcceptedAt: serverTimestamp(),
-      // Cloud Functions 스케줄러가 이 필드로 2일 마감 체크
-      trackingDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    })
+    await updateDoc(doc(db, 'chats', chatId), updates)
 
-    // 시스템 메시지 생성
     const systemText = deliveryType === 'direct'
       ? '직거래로 진행하기로 했어요 🤝'
-      : '판매자가 송장번호를 등록했어요. 확인하러 갈까요? →'
+      : '📦 택배 거래가 시작됐어요. 판매자가 48시간 내에 송장번호를 등록할 거예요.'
 
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
-      type:     'system',
-      text:     systemText,
-      // action: 'viewDelivery' → 구매자가 탭하면 배송 상세 페이지로 이동
-      action:   deliveryType === 'parcel' ? 'viewDelivery' : null,
-      senderId: 'system',
-      createdAt: serverTimestamp(),
+      type: 'system', text: systemText, action: null,
+      senderId: 'system', createdAt: serverTimestamp(),
     })
+    await updateDoc(doc(db, 'chats', chatId), {
+      lastMessage: systemText, lastMessageTime: serverTimestamp(),
+    })
+  }
+
+  /**
+   * 송장번호 등록 (판매자 전용, 거래 시작 후)
+   *
+   * - tradeStatus 'pending' → 'shipped' 로 변경
+   *   → Cloud Functions 스케줄러 체크 대상에서 제외됨
+   * - deliveryInfo에 carrier, trackingNumber, shippedAt 저장
+   */
+  const handleTrackingRegister = async ({ carrier, trackingNumber }) => {
+    if (!chatId) return
+    setShowTrackingModal(false)
 
     await updateDoc(doc(db, 'chats', chatId), {
-      lastMessage:     systemText,
-      lastMessageTime: serverTimestamp(),
+      deliveryInfo: {
+        deliveryType: 'parcel',
+        carrier,
+        trackingNumber,
+        shippedAt: serverTimestamp(),
+      },
+      tradeStatus: 'shipped',  // 스케줄러 체크 대상 해제
+    })
+
+    const systemText = '판매자가 송장번호를 등록했어요. 확인하러 갈까요? →'
+    await addDoc(collection(db, 'chats', chatId, 'messages'), {
+      type: 'system', text: systemText, action: 'viewDelivery',
+      senderId: 'system', createdAt: serverTimestamp(),
+    })
+    await updateDoc(doc(db, 'chats', chatId), {
+      lastMessage: systemText, lastMessageTime: serverTimestamp(),
     })
   }
 
   /**
    * 거래완료 처리
    * - 구매자: 언제든 가능
-   * - 판매자: 직거래 또는 배송 7일 후 가능
+   * - 판매자: 직거래 즉시 / 택배는 shippedAt 기준 7일 후
    */
   const handleComplete = async () => {
     if (!chatId || !canComplete) return
@@ -468,22 +595,17 @@ export default function ChatRoom() {
       chatTradeStatus: 'completed',
       completedAt:     serverTimestamp(),
     })
-
     if (product?.id) {
       await updateDoc(doc(db, 'posts', product.id), { status: '거래완료' })
       setProductStatus('거래완료')
     }
-
+    const systemText = '거래가 완료됐어요 ✅'
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
-      type:     'system',
-      text:     '거래가 완료됐어요 ✅',
-      senderId: 'system',
-      createdAt: serverTimestamp(),
+      type: 'system', text: systemText, action: null,
+      senderId: 'system', createdAt: serverTimestamp(),
     })
-
     await updateDoc(doc(db, 'chats', chatId), {
-      lastMessage:     '거래가 완료됐어요 ✅',
-      lastMessageTime: serverTimestamp(),
+      lastMessage: systemText, lastMessageTime: serverTimestamp(),
     })
   }
 
@@ -499,28 +621,22 @@ export default function ChatRoom() {
     )
   }
 
-  // 거래 상태 탭 버튼 설정
+  // 거래 상태 탭 설정
   const tradeStatusTabs = [
     {
-      key:     'chatting',
-      label:   '대화중',
-      // 대화중 탭은 클릭 불가 (상태 표시용)
+      key: 'chatting', label: '대화중',
       onClick: null,
-      active:  chatTradeStatus === 'chatting',
+      active: chatTradeStatus === 'chatting',
     },
     {
-      key:     'trading',
-      label:   '거래중',
-      // 거래중: 판매자만 클릭 가능, 이미 거래중/완료이면 비활성
+      key: 'trading', label: '거래중',
       onClick: isSeller && chatTradeStatus === 'chatting' ? () => setShowTradeModal(true) : null,
-      active:  chatTradeStatus === 'trading',
+      active: chatTradeStatus === 'trading',
     },
     {
-      key:     'completed',
-      label:   '거래완료',
-      // 거래완료: canComplete 조건 충족 시 클릭 가능
+      key: 'completed', label: '거래완료',
       onClick: canComplete ? handleComplete : null,
-      active:  chatTradeStatus === 'completed',
+      active: chatTradeStatus === 'completed',
     },
   ]
 
@@ -604,7 +720,6 @@ export default function ChatRoom() {
                 {product.type === 'share' ? '나눔' : `${Number(product.price).toLocaleString()}원`}
               </p>
             </div>
-            {/* 판매자만 게시글 상태 변경 가능 */}
             {isSeller && (
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <button
@@ -645,37 +760,74 @@ export default function ChatRoom() {
                 )}
               </div>
             )}
-            {/* 구매자는 상태 뱃지만 표시 */}
             {!isSeller && <StatusBadge status={productStatus} />}
           </div>
 
           {/* 거래 상태 바 */}
-          <div style={{
-            display: 'flex', alignItems: 'center',
-            padding: '8px 16px 10px', gap: 8,
-          }}>
-            <span style={{ fontSize: 12, color: C.gray, fontWeight: 600, flexShrink: 0 }}>
-              거래중이신가요?
-            </span>
-            <div style={{ display: 'flex', gap: 6, flex: 1, justifyContent: 'flex-end' }}>
-              {tradeStatusTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={tab.onClick ?? undefined}
-                  style={{
-                    padding: '5px 12px', borderRadius: 999,
-                    border: `1.5px solid ${tab.active ? C.point : C.border}`,
-                    background: tab.active ? C.point : C.white,
-                    color: tab.active ? C.white : C.gray,
-                    fontFamily: FONT, fontSize: 12, fontWeight: 700,
-                    cursor: tab.onClick ? 'pointer' : 'default',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
+          <div style={{ padding: '8px 16px 10px' }}>
+            {/* 탭 버튼들 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isPendingTracking ? 8 : 0 }}>
+              <span style={{ fontSize: 12, color: C.gray, fontWeight: 600, flexShrink: 0 }}>
+                거래중이신가요?
+              </span>
+              <div style={{ display: 'flex', gap: 6, flex: 1, justifyContent: 'flex-end' }}>
+                {tradeStatusTabs.map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={tab.onClick ?? undefined}
+                    style={{
+                      padding: '5px 12px', borderRadius: 999,
+                      border: `1.5px solid ${tab.active ? C.point : C.border}`,
+                      background: tab.active ? C.point : C.white,
+                      color: tab.active ? C.white : C.gray,
+                      fontFamily: FONT, fontSize: 12, fontWeight: 700,
+                      cursor: tab.onClick ? 'pointer' : 'default',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* 송장 미등록 배너 — 판매자: 타이머 + 등록 버튼 / 구매자: 안내 */}
+            {isPendingTracking && (
+              isSeller ? (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: '#FFF8E7', borderRadius: 10, padding: '8px 12px',
+                  border: '1px solid #FFE082',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Clock size={13} color="#B8860B" strokeWidth={2} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#B8860B' }}>
+                      {timeLeft ? `${timeLeft} 남았어요` : '기한 확인 중...'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowTrackingModal(true)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 999,
+                      background: C.point, color: C.white, border: 'none',
+                      fontFamily: FONT, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    송장 등록
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  background: C.grayLight, borderRadius: 10, padding: '8px 12px',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Clock size={13} color={C.gray} strokeWidth={2} />
+                  <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>
+                    판매자가 배송 준비 중이에요
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
       )}
@@ -690,7 +842,6 @@ export default function ChatRoom() {
           const prevMsg = i > 0 ? messages[i - 1] : null
           const showAvatar = !isMe && (prevMsg?.senderId !== msg.senderId || showDate)
 
-          // 시스템 메시지 렌더링 (중앙 정렬, 클릭 가능)
           if (msg.type === 'system') {
             return (
               <div key={msg.id}>
@@ -698,9 +849,7 @@ export default function ChatRoom() {
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
                   <button
                     onClick={() => {
-                      if (msg.action === 'viewDelivery' && chatId) {
-                        navigate(`/delivery/${chatId}`)
-                      }
+                      if (msg.action === 'viewDelivery' && chatId) navigate(`/delivery/${chatId}`)
                     }}
                     style={{
                       padding: '8px 14px', borderRadius: 20,
@@ -717,7 +866,6 @@ export default function ChatRoom() {
             )
           }
 
-          // 일반 메시지 렌더링
           return (
             <div key={msg.id}>
               {showDate && <DateDivider date={date} />}
@@ -726,8 +874,7 @@ export default function ChatRoom() {
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%',
                     background: C.grayLight, flexShrink: 0, overflow: 'hidden',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
                     visibility: showAvatar ? 'visible' : 'hidden',
                   }}>
                     {otherPhoto
@@ -795,11 +942,17 @@ export default function ChatRoom() {
         </button>
       </div>
 
-      {/* 거래 방식 선택 모달 */}
       {showTradeModal && (
         <TradeModal
           onClose={() => setShowTradeModal(false)}
           onConfirm={handleTradeConfirm}
+        />
+      )}
+
+      {showTrackingModal && (
+        <TrackingModal
+          onClose={() => setShowTrackingModal(false)}
+          onConfirm={handleTrackingRegister}
         />
       )}
 
