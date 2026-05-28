@@ -21,11 +21,11 @@ import { useAuth } from '../context/AuthContext'
 
 // 택배사별 배송 조회 URL (송장번호를 URL 끝에 붙이면 바로 조회 가능)
 const CARRIER_TRACKING_URL = {
-  'CJ대한통운':  'https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=',
-  '한진택배':    'https://www.hanjin.co.kr/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&wblnumText2=',
-  '롯데택배':    'https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=',
-  '우체국택배':  'https://service.epost.go.kr/trace.RetrieveEmsRVDomRcvReg.comm?sid1=',
-  '로젠택배':    'https://www.ilogen.com/web/personal/trace/',
+  'CJ대한통운': 'https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=',
+  '한진택배':   'https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=',
+  '롯데택배':   'https://www.lotteglogis.com/open/tracking?InvNo=',
+  '우체국택배': 'https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm?sid1=',
+  '로젠택배':   'https://www.ilogen.com/web/personal/trace/',
 }
 
 // 거래 완료 처리 시 게시글 상태도 '거래완료'로 업데이트
