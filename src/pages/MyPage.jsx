@@ -35,7 +35,7 @@ function SalesTab({ myPosts }) {
         return (
           <div key={item.id}>
             <div
-              onClick={() => navigate(`/product/${item.id}`)}
+              onClick={() => navigate(`/product/${item.id}`, { state: { product: item } })}
               style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
             >
               {item.images?.[0] && (

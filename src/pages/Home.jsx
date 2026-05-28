@@ -94,7 +94,7 @@ function ShareCard({ item }) {
   const navigate = useNavigate()
   return (
     <div
-      onClick={() => navigate(`/product/${item.id}`)}
+      onClick={() => navigate(`/product/${item.id}`, { state: { product: item } })}
       style={{
         flexShrink: 0, width: 148,
         background: C.white, borderRadius: 16,
@@ -180,7 +180,7 @@ function LatestCard({ item }) {
   const navigate = useNavigate()
   return (
     <div
-      onClick={() => navigate(`/product/${item.id}`)}
+      onClick={() => navigate(`/product/${item.id}`, { state: { product: item } })}
       style={{
         display: 'flex', gap: 14,
         background: C.white, borderRadius: 16,

@@ -164,7 +164,7 @@ export default function DeliveryDetail() {
         {/* 상품 정보 */}
         {product && (
           <div
-            onClick={() => navigate(`/product/${product.id}`)}
+            onClick={() => navigate(`/product/${product.id}`, { state: { product } })}
             style={{
               background: C.white, borderRadius: 14, padding: '14px 16px',
               display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',

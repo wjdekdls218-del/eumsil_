@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, MoreVertical } from 'lucide-react'
 import { doc, getDoc, deleteDoc } from 'firebase/firestore'
 import { C, FONT } from '../theme'
@@ -14,7 +14,7 @@ function DeleteModal({ onConfirm, onCancel }) {
       background: 'rgba(0,0,0,0.45)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }}>
-      <div style={{ width: '100%', maxWidth: 390, background: C.white, borderRadius: '20px 20px 0 0', padding: '28px 24px 36px' }}>
+      <div style={{ width: '100%', maxWidth: 430, background: C.white, borderRadius: '20px 20px 0 0', padding: '28px 24px 36px' }}>
         <p style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>정말 삭제할까요?</p>
         <p style={{ margin: '0 0 24px', fontSize: 14, color: C.gray }}>삭제된 글은 복구할 수 없어요.</p>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -48,14 +48,19 @@ function StatusBadge({ status }) {
 export default function ProductDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
-  const [product, setProduct] = useState(null)
-  const [loading, setLoading] = useState(true)
+
+  // 이전 페이지에서 이미 불러온 데이터가 있으면 즉시 표시 (로딩 없음)
+  const prefetched = location.state?.product ?? null
+  const [product, setProduct] = useState(prefetched)
+  const [loading, setLoading] = useState(!prefetched)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showReport, setShowReport] = useState(false)
 
   useEffect(() => {
+    // 이미 데이터가 있으면 백그라운드에서 최신 데이터로 갱신만
     const fetch = async () => {
       try {
         const snap = await getDoc(doc(db, 'posts', id))
@@ -72,7 +77,7 @@ export default function ProductDetail() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <p style={{ color: C.gray, fontSize: 14 }}>불러오는 중...</p>
       </div>
     )
@@ -80,7 +85,7 @@ export default function ProductDetail() {
 
   if (!product) {
     return (
-      <div style={{ maxWidth: 390, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: C.bg, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
         <p style={{ color: C.text, fontSize: 16, fontWeight: 700 }}>게시글을 찾을 수 없어요</p>
         <button onClick={() => navigate('/')} style={{ border: 'none', background: C.point, color: C.white, borderRadius: 999, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
           홈으로
@@ -100,7 +105,7 @@ export default function ProductDetail() {
 
   return (
     <div style={{
-      maxWidth: 390, margin: '0 auto', minHeight: '100dvh',
+      maxWidth: 430, margin: '0 auto', minHeight: '100dvh',
       background: C.bg, fontFamily: FONT,
       paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
     }}>
@@ -271,7 +276,7 @@ export default function ProductDetail() {
       <div style={{
         position: 'fixed', bottom: 0,
         left: '50%', transform: 'translateX(-50%)',
-        width: '100%', maxWidth: 390,
+        width: '100%', maxWidth: 430,
         background: C.white,
         borderTop: `1px solid ${C.border}`,
         padding: '12px 20px',
