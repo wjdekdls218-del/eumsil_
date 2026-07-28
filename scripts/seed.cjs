@@ -2,10 +2,14 @@
  * 이음실 더미 데이터 삽입 스크립트
  *
  * 사용법:
- *   node scripts/seed.js          → 게시글 + 커뮤니티 전체 삽입
- *   node scripts/seed.js posts    → 게시글만
- *   node scripts/seed.js community → 커뮤니티만
- *   node scripts/seed.js clear    → 이 스크립트로 넣은 더미 데이터 전체 삭제
+ *   node scripts/seed.cjs                  → 게시글 + 커뮤니티 전체 삽입
+ *   node scripts/seed.cjs posts            → 게시글만
+ *   node scripts/seed.cjs community        → 커뮤니티만
+ *   node scripts/seed.cjs clear            → 더미 데이터 전체 삭제
+ *   node scripts/seed.cjs clear posts      → 더미 게시글만 삭제
+ *   node scripts/seed.cjs clear community  → 더미 커뮤니티 글만 삭제
+ *
+ * 삭제는 isSeedDoc: true 인 문서만 지운다. 직접 작성한 글은 이 플래그가 없어 안전하다.
  *
  * 데이터 수정: 아래 POSTS, COMMUNITY_POSTS 배열을 직접 편집하세요.
  */
@@ -388,10 +392,10 @@ async function seedCommunity(token) {
   }
 }
 
-async function clearSeedData(token) {
-  console.log('\n🗑️  더미 데이터 삭제 중...')
+async function clearSeedData(token, targets = ['posts', 'community']) {
+  console.log(`\n🗑️  더미 데이터 삭제 중... (대상: ${targets.join(', ')})`)
 
-  for (const col of ['posts', 'community']) {
+  for (const col of targets) {
     const snap = await firestoreRequest('GET', `/${col}?pageSize=200`, null, token)
     const docs = snap.documents ?? []
     let deleted = 0
@@ -409,13 +413,18 @@ async function clearSeedData(token) {
 }
 
 async function main() {
-  const arg = process.argv[2]
+  const arg    = process.argv[2]
+  const target = process.argv[3]   // clear 뒤에 posts / community 를 붙이면 해당 컬렉션만 삭제
   console.log('🔑 인증 중...')
   const token = await getToken()
   console.log('✅ 인증 완료')
 
   if (arg === 'clear') {
-    await clearSeedData(token)
+    if (target && !['posts', 'community'].includes(target)) {
+      console.log(`❌ 삭제 대상은 posts 또는 community 만 가능해요 (입력: ${target})`)
+      process.exit(1)
+    }
+    await clearSeedData(token, target ? [target] : ['posts', 'community'])
   } else if (arg === 'posts') {
     await seedPosts(token)
   } else if (arg === 'community') {
