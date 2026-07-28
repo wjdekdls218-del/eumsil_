@@ -1,0 +1,138 @@
+rules_version = '2';
+
+/**
+ * 이음실 Firestore 보안 규칙
+ *
+ * [원칙]
+ *  - 게시글·질문방·공지·프로필은 비로그인 방문자도 읽을 수 있다 (포트폴리오/첫 방문 UX)
+ *  - 쓰기는 로그인한 사용자만, 그리고 원칙적으로 본인 문서만
+ *  - 채팅은 참여자 본인들만 읽고 쓸 수 있다
+ *  - 신고 내역과 관리 기능은 관리자(users/{uid}.isAdmin == true)만 접근
+ *
+ * [주의]
+ *  - Cloud Functions는 Admin SDK를 쓰므로 이 규칙을 우회한다 (스케줄러/알림 발송 영향 없음)
+ *  - 이 파일이 배포된 규칙의 유일한 원본이다. 콘솔에서 직접 수정하면 이 파일과 어긋난다.
+ *    변경은 항상 이 파일을 고친 뒤 `firebase deploy --only firestore:rules` 로 반영할 것.
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 공통 헬퍼 ──────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // 이번 수정으로 실제 바뀌는 필드 목록이 허용된 것들뿐인지 검사
+    function onlyChanges(allowedFields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    // ── 사용자 프로필 ──────────────────────────
+    // 닉네임/프로필 사진은 게시글·채팅에 노출되므로 공개 읽기
+    match /users/{uid} {
+      allow read:   if true;
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ── 거래 게시글 ────────────────────────────
+    match /posts/{postId} {
+      allow read:   if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      // 본인·관리자는 전체 수정 가능.
+      // 그 외 로그인 사용자는 거래 완료 처리를 위해 status 필드만 바꿀 수 있다
+      // (구매자가 DeliveryDetail에서 '거래 완료'를 누르는 경로)
+      allow update: if isSignedIn() && (
+                         resource.data.uid == request.auth.uid
+                      || isAdmin()
+                      || onlyChanges(['status'])
+                    );
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ── 질문방 ────────────────────────────────
+    match /community/{postId} {
+      allow read:   if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      // 답변 작성·좋아요는 남이 하므로 카운터 필드만 따로 허용
+      allow update: if isSignedIn() && (
+                         resource.data.uid == request.auth.uid
+                      || isAdmin()
+                      || onlyChanges(['likes', 'answerCount', 'answers', 'updatedAt'])
+                    );
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+
+      match /answers/{answerId} {
+        allow read:   if true;
+        allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+        allow update: if isSignedIn() && (
+                           resource.data.uid == request.auth.uid
+                        || isAdmin()
+                        || onlyChanges(['likes', 'updatedAt'])
+                      );
+        allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // ── 채팅 ──────────────────────────────────
+    // participants 배열에 들어있는 두 사람만 접근 가능
+    function isChatMember(chatId) {
+      return isSignedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+
+    match /chats/{chatId} {
+      allow read:   if isSignedIn()
+                    && (request.auth.uid in resource.data.participants || isAdmin());
+      allow create: if isSignedIn()
+                    && request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn()
+                    && (request.auth.uid in resource.data.participants || isAdmin());
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read:   if isChatMember(chatId) || isAdmin();
+        allow create: if isChatMember(chatId);
+        allow update: if isChatMember(chatId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ── 알림 ──────────────────────────────────
+    // 생성은 주로 Cloud Functions(규칙 우회)가 하고, 클라이언트는 본인 것만 읽고 읽음 처리
+    match /notifications/{notificationId} {
+      allow read:   if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ── 공지사항 ──────────────────────────────
+    match /notices/{noticeId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 신고 ──────────────────────────────────
+    // 신고는 누구나(로그인 후) 접수할 수 있지만, 열람·처리는 관리자만
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read:   if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── 그 외 전부 차단 ────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

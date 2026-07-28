@@ -108,8 +108,13 @@ function ShareCard({ item }) {
       onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
     >
       <div style={{ position: 'relative' }}>
-        <img src={item.imageUrl || item.image} alt={item.title}
-          style={{ width: '100%', height: 136, objectFit: 'cover', display: 'block' }} />
+        {/* 사진이 없는 글은 깨진 이미지 대신 회색 영역 (ProductDetail과 동일 패턴) */}
+        {item.imageUrl || item.image ? (
+          <img src={item.imageUrl || item.image} alt={item.title}
+            style={{ width: '100%', height: 136, objectFit: 'cover', display: 'block' }} />
+        ) : (
+          <div style={{ width: '100%', height: 136, background: C.grayLight }} />
+        )}
         <span style={{
           position: 'absolute', top: 8, left: 8,
           background: C.point, color: C.white,
@@ -194,8 +199,13 @@ function LatestCard({ item }) {
       onTouchStart={e => e.currentTarget.style.transform = 'scale(0.98)'}
       onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <img src={item.imageUrl || item.image} alt={item.title}
-        style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }} />
+      {/* 사진이 없는 글은 깨진 이미지 대신 회색 영역 (ProductDetail과 동일 패턴) */}
+      {item.imageUrl || item.image ? (
+        <img src={item.imageUrl || item.image} alt={item.title}
+          style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }} />
+      ) : (
+        <div style={{ width: 80, height: 80, borderRadius: 12, background: C.grayLight, flexShrink: 0 }} />
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
           margin: '0 0 5px', fontSize: 14, fontWeight: 600, color: C.text,

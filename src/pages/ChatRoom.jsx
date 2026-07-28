@@ -707,11 +707,16 @@ export default function ChatRoom() {
         <div style={{ flexShrink: 0, background: C.white, borderBottom: `1px solid ${C.border}` }}>
           {/* 상품 정보 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
-            <img
-              src={product.imageUrl || product.image}
-              alt={product.title}
-              style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-            />
+            {/* 사진이 없는 글은 깨진 이미지 대신 회색 영역 (ProductDetail과 동일 패턴) */}
+            {product.imageUrl || product.image ? (
+              <img
+                src={product.imageUrl || product.image}
+                alt={product.title}
+                style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+              />
+            ) : (
+              <div style={{ width: 52, height: 52, borderRadius: 10, background: C.grayLight, flexShrink: 0 }} />
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                 {product.title}
